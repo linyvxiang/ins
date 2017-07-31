@@ -263,6 +263,22 @@ message RpcStatResponse {
     repeated StatInfo stats = 2;
 }
 
+message AddNodeRequest {
+    required string node_addr = 1;
+}
+
+message AddNodeResponse {
+    required Status status = 1;
+}
+
+message RemoveNodeRequest {
+    required string node_addr = 1;
+}
+
+message RemoveNodeResponse {
+    required Status status = 1;
+}
+
 service InsNode {
     rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
     rpc Vote(VoteRequest) returns (VoteResponse);
@@ -280,5 +296,7 @@ service InsNode {
     rpc ShowStatus(ShowStatusRequest) returns (ShowStatusResponse);
     rpc CleanBinlog(CleanBinlogRequest) returns (CleanBinlogResponse);
     rpc RpcStat(RpcStatRequest) returns (RpcStatResponse);
+    rpc AddNode(AddNodeRequest) returns(AddNodeResponse);
+    rpc RemoveNode(RemoveNodeRequest) returns(RemoveNodeResponse);
 }
 

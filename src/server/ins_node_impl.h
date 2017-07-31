@@ -268,6 +268,15 @@ private:
                         const std::string& action);
     void SampleAccessLog(const ::google::protobuf::RpcController* controller,
                          const char* action);
+    void AddNode(const ::google::protobuf::RpcController* controller,
+                 ::galaxy::ins::AddNodeRequest* request,
+                 ::galaxy::ins::AddNodeResponse* response,
+                 ::google::protobuf::Closure* done);
+    void RemoveNode(const ::google::protobuf::RpcController* controller,
+                 ::galaxy::ins::RemoveNodeRequest* request,
+                 ::galaxy::ins::RemoveNodeResponse* response,
+                 ::google::protobuf::Closure* done);
+
 public:
     std::vector<std::string> members_;
 private:
