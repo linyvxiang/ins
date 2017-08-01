@@ -37,6 +37,8 @@ struct ClientAck {
     galaxy::ins::LoginResponse* login_response;
     galaxy::ins::LogoutResponse* logout_response;
     galaxy::ins::RegisterResponse* register_response;
+    galaxy::ins::AddNodeResponse* add_node_response;
+    galaxy::ins::RemoveNodeResponse* remove_node_response;
     google::protobuf::Closure* done;
     ClientAck() : response(NULL),
                   del_response(NULL),
@@ -45,6 +47,8 @@ struct ClientAck {
                   login_response(NULL),
                   logout_response(NULL),
                   register_response(NULL),
+                  add_node_response(NULL),
+                  remove_node_response(NULL),
                   done(NULL) {
     }
 };
@@ -204,6 +208,15 @@ public:
                  const ::galaxy::ins::RpcStatRequest* request,
                  ::galaxy::ins::RpcStatResponse* response,
                  ::google::protobuf::Closure* done);
+    void AddNode(const ::google::protobuf::RpcController* controller,
+                 ::galaxy::ins::AddNodeRequest* request,
+                 ::galaxy::ins::AddNodeResponse* response,
+                 ::google::protobuf::Closure* done);
+    void RemoveNode(const ::google::protobuf::RpcController* controller,
+                 ::galaxy::ins::RemoveNodeRequest* request,
+                 ::galaxy::ins::RemoveNodeResponse* response,
+                 ::google::protobuf::Closure* done);
+
 private:
     void VoteCallback(const ::galaxy::ins::VoteRequest* request,
                       ::galaxy::ins::VoteResponse* response,
@@ -268,21 +281,29 @@ private:
                         const std::string& action);
     void SampleAccessLog(const ::google::protobuf::RpcController* controller,
                          const char* action);
-    void AddNode(const ::google::protobuf::RpcController* controller,
-                 ::galaxy::ins::AddNodeRequest* request,
-                 ::galaxy::ins::AddNodeResponse* response,
-                 ::google::protobuf::Closure* done);
-    void RemoveNode(const ::google::protobuf::RpcController* controller,
-                 ::galaxy::ins::RemoveNodeRequest* request,
-                 ::galaxy::ins::RemoveNodeResponse* response,
-                 ::google::protobuf::Closure* done);
-
+    void WriteMembershipChangeLog(const std::string& new_node_addr);
 public:
     std::vector<std::string> members_;
 private:
     bool stop_;
     std::string self_id_;
     int64_t current_term_;
+    struct MemebrshipChangeContext {
+        const ::google::protobuf::RpcController* controller;
+        ::google::protobuf::Message* request;
+        ::google::protobuf::Message* response;
+        ::google::protobuf::Closure* done;
+        MemebrshipChangeContext(const ::google::protobuf::RpcController* cont,
+                                ::google::protobuf::Message* req,
+                                ::google::protobuf::Message* res,
+                                ::google::protobuf::Closure* d) :
+            controller(cont),
+            request(req),
+            response(res),
+            done(d) {}
+        ~MemebrshipChangeContext() { }
+    };
+    MemebrshipChangeContext* membership_change_context_;
     std::map<int64_t, std::string> voted_for_;
     std::map<int64_t, uint32_t> vote_grant_;
     std::vector<galaxy::ins::Entry> binlog_;

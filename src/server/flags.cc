@@ -27,6 +27,7 @@ DEFINE_double(ins_trace_ratio, 0.001, "trace log printing ratio");
 DEFINE_string(ins_log_file, "stdout", "filename of log file");
 DEFINE_int32(ins_log_size, 1024, "max size of single log file");
 DEFINE_int32(ins_log_total_size, 10240, "max size of all log file");
+DEFINE_int64(min_log_gap, 100, "min log gap for catchup");
 
 //ins_cli only
 DEFINE_string(ins_cmd, "", "the command of inc shell");

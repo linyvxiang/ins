@@ -32,6 +32,7 @@ DECLARE_int32(ins_binlog_block_size);
 DECLARE_int32(ins_binlog_write_buffer_size);
 DECLARE_int32(performance_buffer_size);
 DECLARE_double(ins_trace_ratio);
+DECLARE_int64(min_log_gap);
 
 const std::string tag_last_applied_index = "#TAG_LAST_APPLIED_INDEX#";
 
@@ -45,6 +46,7 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
                          ) : stop_(false),
                              self_id_(server_id),
                              current_term_(0),
+                             membership_change_context_(NULL),
                              status_(kFollower),
                              heartbeat_count_(0),
                              meta_(NULL),
@@ -380,6 +382,20 @@ void InsNodeImpl::CommitIndexObserv() {
                     ack.register_response->set_status(log_status);
                     ack.register_response->set_leader_id("");
                     ack.done->Run();
+                }
+                if (ack.add_node_response) {
+                    assert(log_entry.op == kAddNode);
+                    const std::string& new_node_addr = log_entry.key;
+                    members_.push_back(new_node_addr);
+                    replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog,
+                                this, new_node_addr));
+
+                    ack.add_node_response->set_status(log_status);
+                    ack.done->Run();
+                    assert(membership_change_context_);
+                    delete membership_change_context_;
+                    membership_change_context_ = NULL;
+
                 }
                 client_ack_.erase(i);
             }
@@ -922,8 +938,39 @@ void InsNodeImpl::ReplicateLog(std::string follower_id) {
             if (response.success()) { // log replicated
                 next_index_[follower_id] = index + batch_span;
                 match_index_[follower_id] = index + batch_span - 1;
+                bool find = false;
                 if (max_term == current_term_) {
-                    UpdateCommitIndex(index + batch_span - 1);
+                    for (std::vector<std::string>::iterator it =
+                            members_.begin(); it != members_.end(); ++it) {
+                        if (follower_id == *it) {
+                            find = true;
+                        }
+                    }
+                    if (find) {
+                        UpdateCommitIndex(index + batch_span - 1);
+                    } else {
+                        LOG(DEBUG, "node %s is in membership change,"
+                                "do not wakeup commit", follower_id.c_str());
+                    }
+                }
+                if (!find &&
+                    next_index_[follower_id] + FLAGS_min_log_gap >=
+                    binlogger_->GetLength()) {
+                    // so this is a new comer and is suitable for join
+                    // TODO write a membership change log
+                    // maybe already timeout, so check membership change context
+                    if (!membership_change_context_) {
+                        LOG(WARNING, "not in membership change, maybe already timeout");
+                        break;
+                    }
+
+                    LOG(INFO, "new node %s caught up, "
+                               "try write membership change log",
+                               follower_id.c_str());
+                    follower_worker_.AddTask(boost::bind(
+                                             &InsNodeImpl::WriteMembershipChangeLog,
+                                             this, follower_id));
+                    break;
                 }
                 latest_replicating_ok = true;
             } else if (response.is_busy()) {
@@ -2170,7 +2217,22 @@ void InsNodeImpl::AddNode(const ::google::protobuf::RpcController* controller,
                  ::galaxy::ins::AddNodeRequest* request,
                  ::galaxy::ins::AddNodeResponse* response,
                  ::google::protobuf::Closure* done) {
+    MutexLock lock(&mu_);
+    if (membership_change_context_ != NULL) {
+        LOG(INFO, "is in membership change now, so refuse new change request");
+        response->set_status(kError);
+        done->Run();
+        return;
+    }
+    membership_change_context_ =
+        new MemebrshipChangeContext(controller, request, response, done);
 
+    const std::string& new_node_addr = request->node_addr();
+    next_index_[new_node_addr] = binlogger_->GetLength();
+    match_index_[new_node_addr] = -1;
+    replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog, this, new_node_addr));
+    //done->Run() will be called when memberhsip change is finished
+    //TODO add delay task to check membership change failure
 }
 
 void InsNodeImpl::RemoveNode(const ::google::protobuf::RpcController* controller,
@@ -2178,6 +2240,33 @@ void InsNodeImpl::RemoveNode(const ::google::protobuf::RpcController* controller
                  ::galaxy::ins::RemoveNodeResponse* response,
                  ::google::protobuf::Closure* done) {
 
+}
+
+void InsNodeImpl::WriteMembershipChangeLog(const std::string& new_node_addr) {
+    MutexLock lock(&mu_);
+    if (!membership_change_context_) {
+        LOG(INFO, "not in membership change, maybe timeout");
+        return;
+    }
+    LogEntry log_entry;
+    log_entry.key = new_node_addr;
+    log_entry.value = "";
+    log_entry.term = current_term_;
+    log_entry.op = kAddNode;
+
+    binlogger_->AppendEntry(log_entry);
+
+    int64_t cur_index = binlogger_->GetLength() - 1;
+    ClientAck& ack = client_ack_[cur_index];
+    ack.done = membership_change_context_->done;
+    ack.add_node_response =
+        dynamic_cast<AddNodeResponse*>(membership_change_context_->response);
+    //TODO check whether need to replicate this log to the new comer
+    replication_cond_->Broadcast();
+    if (single_node_mode_) { //single node cluster
+        UpdateCommitIndex(binlogger_->GetLength() - 1);
+    }
+    return;
 }
 
 } //namespace ins
