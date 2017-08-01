@@ -33,6 +33,7 @@ DECLARE_int32(ins_binlog_write_buffer_size);
 DECLARE_int32(performance_buffer_size);
 DECLARE_double(ins_trace_ratio);
 DECLARE_int64(min_log_gap);
+DECLARE_bool(ins_quiet_mode);
 
 const std::string tag_last_applied_index = "#TAG_LAST_APPLIED_INDEX#";
 
@@ -67,6 +68,11 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
     std::vector<std::string>::const_iterator it = members.begin();
     bool self_in_cluster = false;
     for(; it != members.end(); it++) {
+        if (self_id_ == *it && FLAGS_ins_quiet_mode) {
+            // we are in quiet mode, do not count self now,
+            // members_ will be updated after membership change log is committed
+            continue;
+        }
         members_.push_back(*it);
         if (self_id_ == *it) {
             LOG(INFO, "cluster member[Self]: %s", it->c_str());
@@ -75,7 +81,7 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
             LOG(INFO, "cluster member: %s", it->c_str());
         }
     }
-    if (!self_in_cluster) {
+    if (!self_in_cluster && !FLAGS_ins_quiet_mode) {
         LOG(FATAL, "this node is not in cluster membership,"
                    " please check your configuration. self: %s", self_id_.c_str());
         exit(-1);
@@ -114,8 +120,10 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
     server_start_timestamp_ = ins_common::timer::get_micros();
     committer_.AddTask(boost::bind(&InsNodeImpl::CommitIndexObserv, this));
     MutexLock lock(&mu_);
-    CheckLeaderCrash();
-    session_checker_.AddTask( 
+    if (!FLAGS_ins_quiet_mode) {
+        CheckLeaderCrash();
+    }
+    session_checker_.AddTask(
         boost::bind(&InsNodeImpl::RemoveExpiredSessions, this)
     );
     binlog_cleaner_.AddTask(
@@ -389,6 +397,9 @@ void InsNodeImpl::CommitIndexObserv() {
                     members_.push_back(new_node_addr);
                     replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog,
                                 this, new_node_addr));
+
+                    // we are in quiet mode before, so enable leader election now
+                    CheckLeaderCrash();
 
                     ack.add_node_response->set_success(true);
                     ack.done->Run();
