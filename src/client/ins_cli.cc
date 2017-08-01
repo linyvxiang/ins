@@ -21,6 +21,7 @@ DECLARE_string(ins_start_key);
 DECLARE_string(ins_end_key);
 DECLARE_string(ins_rm_binlog_server_id);
 DECLARE_int64(ins_rm_binlog_index);
+DECLARE_string(ins_new_node_addr);
 
 using namespace galaxy::ins::sdk;
 
@@ -288,6 +289,14 @@ int main(int argc, char* argv[]) {
         } else if (is_logged) {
             printf("not a valid command for logged user, "
                     "you may want to logout by `logout' command\n");
+        } else if (FLAGS_ins_cmd == "addnode") {
+            const std::string& new_node_addr = FLAGS_ins_new_node_addr;
+            LOG(DEBUG, "try add new node %s", new_node_addr.c_str());
+            if (sdk.AddNode(new_node_addr)) {
+                printf("add node %s success\n", new_node_addr.c_str());
+            } else {
+                printf("add node %s fail\n", new_node_addr.c_str());
+            }
         } else {
             // Just exit
         }

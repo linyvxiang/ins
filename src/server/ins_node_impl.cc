@@ -390,7 +390,7 @@ void InsNodeImpl::CommitIndexObserv() {
                     replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog,
                                 this, new_node_addr));
 
-                    ack.add_node_response->set_status(log_status);
+                    ack.add_node_response->set_success(true);
                     ack.done->Run();
                     assert(membership_change_context_);
                     delete membership_change_context_;
@@ -2218,9 +2218,25 @@ void InsNodeImpl::AddNode(const ::google::protobuf::RpcController* controller,
                  ::galaxy::ins::AddNodeResponse* response,
                  ::google::protobuf::Closure* done) {
     MutexLock lock(&mu_);
+
+    if (status_ == kFollower) {
+        response->set_success(false);
+        response->set_leader_id(current_leader_);
+        done->Run();
+        return;
+    }
+
+    if (status_ == kCandidate) {
+        response->set_success(false);
+        response->set_leader_id("");
+        done->Run();
+        return;
+    }
+
+
     if (membership_change_context_ != NULL) {
         LOG(INFO, "is in membership change now, so refuse new change request");
-        response->set_status(kError);
+        response->set_success(false);
         done->Run();
         return;
     }

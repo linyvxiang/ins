@@ -1353,6 +1353,57 @@ void InsSDK::SetTimeoutTime(int64_t milliseconds) {
     LOG(INFO, "timeout time: %ld", timeout_time_);
 }
 
+bool InsSDK::AddNode(const std::string& new_node_addr) {
+    std::vector<std::string> server_list;
+    PrepareServerList(server_list);
+
+    std::vector<std::string>::const_iterator it ;
+    for (it = server_list.begin(); it != server_list.end(); it++) {
+        std::string server_id = *it;
+        LOG(DEBUG, "rpc to %s", server_id.c_str());
+        galaxy::ins::InsNode_Stub *stub, *stub2;
+        rpc_client_->GetStub(server_id, &stub);
+        galaxy::ins::AddNodeRequest request;
+        galaxy::ins::AddNodeResponse response;
+        request.set_node_addr(new_node_addr);
+        bool ok = rpc_client_->SendRequest(stub, &InsNode_Stub::AddNode,
+                                           &request, &response, 2, 1);
+        if (!ok) {
+            LOG(FATAL, "faild to rpc %s", server_id.c_str());
+            continue;
+        }
+
+        if (response.success()) {
+            {
+                MutexLock lock(mu_);
+                leader_id_ = server_id;
+            }
+            return true;
+        } else {
+            if (!response.leader_id().empty()) {
+                server_id = response.leader_id();
+                LOG(DEBUG, "redirect to leader :%s", server_id.c_str());
+                rpc_client_->GetStub(server_id, &stub2);
+                bool ok = rpc_client_->SendRequest(stub2, &InsNode_Stub::AddNode,
+                                             &request, &response, 2, 1);
+                if (ok && response.success()) {
+                    {
+                        MutexLock lock(mu_);
+                        leader_id_ = server_id;
+                    }
+                    return true;
+                }
+            }
+        }
+        ThisThread::Sleep(1000);
+    }
+    return false;
+}
+
+bool InsSDK::RemoveNode(const std::string& old_node_addr) {
+
+}
+
 ScanResult::ScanResult(InsSDK* sdk) : offset_(0),
                                       sdk_(sdk),
                                       error_(kOK) {

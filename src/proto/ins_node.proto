@@ -270,7 +270,8 @@ message AddNodeRequest {
 }
 
 message AddNodeResponse {
-    required Status status = 1;
+    required bool success = 1;
+    optional string leader_id = 2;
 }
 
 message RemoveNodeRequest {
@@ -278,7 +279,8 @@ message RemoveNodeRequest {
 }
 
 message RemoveNodeResponse {
-    required Status status = 1;
+    required bool success = 1;
+    optional string leader_id = 2;
 }
 
 service InsNode {

@@ -119,6 +119,8 @@ public:
     virtual bool IsLoggedIn();
     virtual void RegisterSessionTimeout(void (*handle_session_timeout)(void*), void* ctx );
     virtual void SetTimeoutTime(int64_t milliseconds);
+    virtual bool AddNode(const std::string& new_node_addr);
+    virtual bool RemoveNode(const std::string& old_node_addr);
 
     static std::string StatusToString(int32_t status);
     static std::string ErrorToString(SDKError error);

@@ -40,3 +40,4 @@ DEFINE_string(ins_rm_binlog_server_id, "", "servier id of binlog clean operation
 DEFINE_int32(ins_watch_timeout, 120, "wath timeout(seconds)");
 DEFINE_int32(ins_backup_watch_timeout, 115, "backup watch timeout(seconds)");
 DEFINE_int64(ins_sdk_session_timeout, 6000000, "timeout for session expiration in sdk side");
+DEFINE_string(ins_new_node_addr, "", "new node address for join");
