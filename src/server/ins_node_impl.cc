@@ -34,6 +34,7 @@ DECLARE_int32(performance_buffer_size);
 DECLARE_double(ins_trace_ratio);
 DECLARE_int64(min_log_gap);
 DECLARE_bool(ins_quiet_mode);
+DECLARE_bool(ins_enable_log_compaction);
 
 const std::string tag_last_applied_index = "#TAG_LAST_APPLIED_INDEX#";
 
@@ -126,9 +127,11 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
     session_checker_.AddTask(
         boost::bind(&InsNodeImpl::RemoveExpiredSessions, this)
     );
-    binlog_cleaner_.AddTask(
-        boost::bind(&InsNodeImpl::GarbageClean, this)
-    );
+    if (FLAGS_ins_enable_log_compaction) {
+        binlog_cleaner_.AddTask(
+            boost::bind(&InsNodeImpl::GarbageClean, this)
+        );
+    }
 }
 
 InsNodeImpl::~InsNodeImpl() {
@@ -396,7 +399,7 @@ void InsNodeImpl::CommitIndexObserv() {
                     const std::string& new_node_addr = log_entry.key;
                     members_.push_back(new_node_addr);
                     replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog,
-                                this, new_node_addr));
+                                         this, new_node_addr));
 
                     // we are in quiet mode before, so enable leader election now
                     CheckLeaderCrash();
