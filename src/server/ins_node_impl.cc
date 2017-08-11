@@ -2260,6 +2260,7 @@ void InsNodeImpl::AddNode(::google::protobuf::RpcController* controller,
     const std::string& new_node_addr = request->node_addr();
     next_index_[new_node_addr] = binlogger_->GetLength();
     match_index_[new_node_addr] = -1;
+    LOG(INFO, "try to add node %s", new_node_addr.c_str());
     replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog, this, new_node_addr));
     //done->Run() will be called when memberhsip change is finished
     //TODO add delay task to check membership change failure

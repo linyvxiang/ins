@@ -1367,7 +1367,7 @@ bool InsSDK::AddNode(const std::string& new_node_addr) {
         galaxy::ins::AddNodeResponse response;
         request.set_node_addr(new_node_addr);
         bool ok = rpc_client_->SendRequest(stub, &InsNode_Stub::AddNode,
-                                           &request, &response, 2, 1);
+                                           &request, &response, 6000, 1);
         if (!ok) {
             LOG(WARNING, "faild to rpc %s", server_id.c_str());
             continue;

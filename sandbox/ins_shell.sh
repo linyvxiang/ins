@@ -48,7 +48,7 @@ do
         sh ./test_whoami.sh
     ;;
     "addnode")
-        sh ./test_addnode.sh
+        sh ./test_addnode.sh $arg1
     ;;
     "quit")
         exit 0
