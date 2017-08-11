@@ -47,6 +47,9 @@ do
     "whoami")
         sh ./test_whoami.sh
     ;;
+    "addnode")
+        sh ./test_addnode.sh
+    ;;
     "quit")
         exit 0
     ;;
@@ -62,6 +65,7 @@ do
         echo "  lock (key) [lock on specific key]"
         echo "  register (username) (password) [register a new user]"
         echo "  login (username) (password) [login and open a new session]"
+        echo "  addnode (new_node_addr) [add new node to cluster]"
         echo "  enter quit to exit shell"
         echo "  enter quit to exit shell"
     ;;
