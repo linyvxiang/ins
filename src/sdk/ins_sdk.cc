@@ -1369,7 +1369,7 @@ bool InsSDK::AddNode(const std::string& new_node_addr) {
         bool ok = rpc_client_->SendRequest(stub, &InsNode_Stub::AddNode,
                                            &request, &response, 2, 1);
         if (!ok) {
-            LOG(FATAL, "faild to rpc %s", server_id.c_str());
+            LOG(WARNING, "faild to rpc %s", server_id.c_str());
             continue;
         }
 

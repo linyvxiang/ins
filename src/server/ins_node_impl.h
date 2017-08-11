@@ -208,12 +208,12 @@ public:
                  const ::galaxy::ins::RpcStatRequest* request,
                  ::galaxy::ins::RpcStatResponse* response,
                  ::google::protobuf::Closure* done);
-    void AddNode(const ::google::protobuf::RpcController* controller,
-                 ::galaxy::ins::AddNodeRequest* request,
+    void AddNode(::google::protobuf::RpcController* controller,
+                 const ::galaxy::ins::AddNodeRequest* request,
                  ::galaxy::ins::AddNodeResponse* response,
                  ::google::protobuf::Closure* done);
-    void RemoveNode(const ::google::protobuf::RpcController* controller,
-                 ::galaxy::ins::RemoveNodeRequest* request,
+    void RemoveNode(::google::protobuf::RpcController* controller,
+                 const ::galaxy::ins::RemoveNodeRequest* request,
                  ::galaxy::ins::RemoveNodeResponse* response,
                  ::google::protobuf::Closure* done);
 
@@ -289,12 +289,12 @@ private:
     std::string self_id_;
     int64_t current_term_;
     struct MemebrshipChangeContext {
-        const ::google::protobuf::RpcController* controller;
-        ::google::protobuf::Message* request;
+        ::google::protobuf::RpcController* controller;
+        const ::google::protobuf::Message* request;
         ::google::protobuf::Message* response;
         ::google::protobuf::Closure* done;
-        MemebrshipChangeContext(const ::google::protobuf::RpcController* cont,
-                                ::google::protobuf::Message* req,
+        MemebrshipChangeContext(::google::protobuf::RpcController* cont,
+                                const ::google::protobuf::Message* req,
                                 ::google::protobuf::Message* res,
                                 ::google::protobuf::Closure* d) :
             controller(cont),

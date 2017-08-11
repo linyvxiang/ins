@@ -300,7 +300,7 @@ service InsNode {
     rpc ShowStatus(ShowStatusRequest) returns (ShowStatusResponse);
     rpc CleanBinlog(CleanBinlogRequest) returns (CleanBinlogResponse);
     rpc RpcStat(RpcStatRequest) returns (RpcStatResponse);
-    rpc AddNode(AddNodeRequest) returns(AddNodeResponse);
-    rpc RemoveNode(RemoveNodeRequest) returns(RemoveNodeResponse);
+    rpc AddNode(AddNodeRequest) returns (AddNodeResponse);
+    rpc RemoveNode(RemoveNodeRequest) returns (RemoveNodeResponse);
 }
 

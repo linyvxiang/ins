@@ -2227,8 +2227,8 @@ void InsNodeImpl::SampleAccessLog(const ::google::protobuf::RpcController* contr
     }
 }
 
-void InsNodeImpl::AddNode(const ::google::protobuf::RpcController* controller,
-                 ::galaxy::ins::AddNodeRequest* request,
+void InsNodeImpl::AddNode(::google::protobuf::RpcController* controller,
+                 const ::galaxy::ins::AddNodeRequest* request,
                  ::galaxy::ins::AddNodeResponse* response,
                  ::google::protobuf::Closure* done) {
     MutexLock lock(&mu_);
@@ -2265,8 +2265,8 @@ void InsNodeImpl::AddNode(const ::google::protobuf::RpcController* controller,
     //TODO add delay task to check membership change failure
 }
 
-void InsNodeImpl::RemoveNode(const ::google::protobuf::RpcController* controller,
-                 ::galaxy::ins::RemoveNodeRequest* request,
+void InsNodeImpl::RemoveNode(::google::protobuf::RpcController* controller,
+                 const ::galaxy::ins::RemoveNodeRequest* request,
                  ::galaxy::ins::RemoveNodeResponse* response,
                  ::google::protobuf::Closure* done) {
 
