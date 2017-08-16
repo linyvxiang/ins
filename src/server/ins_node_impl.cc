@@ -348,6 +348,15 @@ void InsNodeImpl::CommitIndexObserv() {
                 case kRegister:
                     log_status = user_manager_->Register(log_entry.key, log_entry.value);
                     break;
+                case kAddNode:
+                    {
+                      const std::string& new_node_addr = log_entry.key;
+                      mu_.Lock();
+                      members_.push_back(new_node_addr);
+                      mu_.Unlock();
+                      replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog, this, new_node_addr));
+                      break;
+                    }
                 default:
                     LOG(WARNING, "Unfamiliar op :%d", static_cast<int>(log_entry.op));
             }
@@ -396,10 +405,6 @@ void InsNodeImpl::CommitIndexObserv() {
                 }
                 if (ack.add_node_response) {
                     assert(log_entry.op == kAddNode);
-                    const std::string& new_node_addr = log_entry.key;
-                    members_.push_back(new_node_addr);
-                    replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog,
-                                         this, new_node_addr));
 
                     // we are in quiet mode before, so enable leader election now
                     CheckLeaderCrash();
@@ -2258,7 +2263,7 @@ void InsNodeImpl::AddNode(::google::protobuf::RpcController* controller,
         new MemebrshipChangeContext(controller, request, response, done);
 
     const std::string& new_node_addr = request->node_addr();
-    next_index_[new_node_addr] = binlogger_->GetLength();
+    next_index_[new_node_addr] = 0;
     match_index_[new_node_addr] = -1;
     LOG(INFO, "try to add node %s", new_node_addr.c_str());
     replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog, this, new_node_addr));
