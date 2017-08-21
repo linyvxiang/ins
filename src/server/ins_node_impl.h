@@ -305,6 +305,7 @@ private:
         ~MemebrshipChangeContext() { }
     };
     MemebrshipChangeContext* membership_change_context_;
+    std::map<int64_t, std::vector<std::string> > changed_members_;
     std::map<int64_t, std::string> voted_for_;
     std::map<int64_t, uint32_t> vote_grant_;
     std::vector<galaxy::ins::Entry> binlog_;

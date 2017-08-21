@@ -95,6 +95,8 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
     if (members_.size() == 1) {
         single_node_mode_ = true;
     }
+    //TODO load snapshot here
+    changed_members_.insert(std::make_pair(-1, members_));
     std::string sub_dir = self_id_;
     boost::replace_all(sub_dir, ":", "_");
 
@@ -353,6 +355,7 @@ void InsNodeImpl::CommitIndexObserv() {
                       const std::string& new_node_addr = log_entry.key;
                       mu_.Lock();
                       members_.push_back(new_node_addr);
+                      changed_members_.erase(i);
                       mu_.Unlock();
                       replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog, this, new_node_addr));
                       break;
@@ -853,21 +856,15 @@ void InsNodeImpl::UpdateCommitIndex(int64_t a_index) {
     uint32_t match_count = 0;
     for (it = members_to_check.begin(); it != members_to_check.end(); ++it) {
       std::string server_id = *it;
+      if (server_id == self_id_) {
+        continue;
+      }
       assert(match_index_.find(server_id) != match_index_.end());
       if (match_index_[server_id] >= a_index) {
         match_count += 1;
       }
     }
-    /*
-    std::vector<std::string>::const_iterator it;
-    uint32_t match_count = 0;
-    for (it = members_.begin(); it != members_.end(); it++) {
-        std::string server_id = *it;
-        if (match_index_[server_id] >= a_index) {
-            match_count += 1;
-        }
-    }
-    */
+
     if (match_count >= match_index_.size()/2 && a_index > commit_index_) {
         commit_index_ = a_index;
         LOG(DEBUG, "update to new commit index: %ld", commit_index_);
@@ -2309,6 +2306,9 @@ void InsNodeImpl::WriteMembershipChangeLog(const std::string& new_node_addr) {
     ack.done = membership_change_context_->done;
     ack.add_node_response =
         dynamic_cast<AddNodeResponse*>(membership_change_context_->response);
+    std::vector<std::string> new_members(members_);
+    new_members.push_back(new_node_addr);
+    changed_members_.insert(std::make_pair(cur_index, new_members));
     //TODO check whether need to replicate this log to the new comer
     replication_cond_->Broadcast();
     if (single_node_mode_) { //single node cluster
@@ -2318,8 +2318,17 @@ void InsNodeImpl::WriteMembershipChangeLog(const std::string& new_node_addr) {
 }
 
 const std::vector<std::string>& InsNodeImpl::GetMembership(int64_t log_idx) {
-  static std::vector<std::string> membership;
-  return membership;
+  std::map<int64_t, std::vector<std::string> >::iterator it = changed_members_.begin();
+  std::map<int64_t, std::vector<std::string> >::iterator last_it = it;
+  for (; it != changed_members_.end(); ++it) {
+    if (it->first >= log_idx) {
+      break;
+    } else {
+      last_it = it;
+    }
+  }
+  assert(last_it->first <= log_idx);
+  return last_it->second;
 }
 
 } //namespace ins
