@@ -282,6 +282,7 @@ private:
     void SampleAccessLog(const ::google::protobuf::RpcController* controller,
                          const char* action);
     void WriteMembershipChangeLog(const std::string& new_node_addr);
+    const std::vector<std::string>& GetMembership(int64_t log_idx);
 public:
     std::vector<std::string> members_;
 private:

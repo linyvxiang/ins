@@ -848,6 +848,17 @@ void InsNodeImpl::Vote(::google::protobuf::RpcController* /*controller*/,
 
 void InsNodeImpl::UpdateCommitIndex(int64_t a_index) {
     mu_.AssertHeld();
+    const std::vector<std::string>& members_to_check = GetMembership(a_index);
+    std::vector<std::string>::const_iterator it;
+    uint32_t match_count = 0;
+    for (it = members_to_check.begin(); it != members_to_check.end(); ++it) {
+      std::string server_id = *it;
+      assert(match_index_.find(server_id) != match_index_.end());
+      if (match_index_[server_id] >= a_index) {
+        match_count += 1;
+      }
+    }
+    /*
     std::vector<std::string>::const_iterator it;
     uint32_t match_count = 0;
     for (it = members_.begin(); it != members_.end(); it++) {
@@ -856,6 +867,7 @@ void InsNodeImpl::UpdateCommitIndex(int64_t a_index) {
             match_count += 1;
         }
     }
+    */
     if (match_count >= match_index_.size()/2 && a_index > commit_index_) {
         commit_index_ = a_index;
         LOG(DEBUG, "update to new commit index: %ld", commit_index_);
@@ -2303,6 +2315,11 @@ void InsNodeImpl::WriteMembershipChangeLog(const std::string& new_node_addr) {
         UpdateCommitIndex(binlogger_->GetLength() - 1);
     }
     return;
+}
+
+const std::vector<std::string>& InsNodeImpl::GetMembership(int64_t log_idx) {
+  static std::vector<std::string> membership;
+  return membership;
 }
 
 } //namespace ins
