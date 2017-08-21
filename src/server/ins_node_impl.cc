@@ -353,11 +353,21 @@ void InsNodeImpl::CommitIndexObserv() {
                 case kAddNode:
                     {
                       const std::string& new_node_addr = log_entry.key;
+                      LOG(INFO, "log idx %ld for add node %s has been committed",
+                                i, new_node_addr.c_str());
                       mu_.Lock();
                       members_.push_back(new_node_addr);
-                      changed_members_.erase(i);
                       mu_.Unlock();
-                      replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog, this, new_node_addr));
+                      replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog,
+                                                       this, new_node_addr));
+                      if (new_node_addr == self_id_ && FLAGS_ins_quiet_mode) {
+                        // we are the new new comer, and has been add to the cluster
+                        // leave quiet mode and enable leader election
+                        FLAGS_ins_quiet_mode = false;
+                        mu_.Lock();
+                        CheckLeaderCrash();
+                        mu_.Unlock();
+                      }
                       break;
                     }
                 default:
@@ -408,9 +418,6 @@ void InsNodeImpl::CommitIndexObserv() {
                 }
                 if (ack.add_node_response) {
                     assert(log_entry.op == kAddNode);
-
-                    // we are in quiet mode before, so enable leader election now
-                    CheckLeaderCrash();
 
                     ack.add_node_response->set_success(true);
                     ack.done->Run();
