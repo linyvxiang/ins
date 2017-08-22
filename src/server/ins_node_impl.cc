@@ -125,11 +125,11 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
     }
 
     // try load snapshot
-    snapshot_manager_ = new SnapshotManager(FLAGS_ins_snapshot_dir);
+    snapshot_manager_ = new SnapshotManager(FLAGS_ins_snapshot_dir + "/" + self_id_);
     SnapshotMeta snapshot_meta;
     bool has_snapshot = snapshot_manager_->GetSnapshotMeta(&snapshot_meta);
     if (!has_snapshot) {
-      LOG(WARNING, "dont have available snapshot in %s", FLAGS_ins_snapshot_dir.c_str());
+      LOG(WARNING, "don't have available snapshot in %s", FLAGS_ins_snapshot_dir.c_str());
     } else {
       if (snapshot_meta.log_index() > last_applied_index_) {
         LOG(INFO, "load snapshot in %s, term: %ld, last_applied_index: %ld",

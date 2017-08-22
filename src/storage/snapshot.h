@@ -13,6 +13,7 @@ class Meta;
 class SnapshotManager {
 public:
   SnapshotManager(const std::string& snapshot_dir);
+  ~SnapshotManager();
   bool AddSnapshot();
   bool LoadSnapshot();
   bool GetSnapshotMeta(SnapshotMeta* meta);

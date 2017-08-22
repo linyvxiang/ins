@@ -1,5 +1,6 @@
 #ifndef GALAXY_INS_INS_NODE_IMPL_H_
 #define GALAXY_INS_INS_NODE_IMPL_H_
+
 #include "proto/ins_node.pb.h"
 
 #include <stdint.h>
