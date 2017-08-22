@@ -10,6 +10,7 @@ static const std::string kDataPrefix = "#D";
 
 SnapshotManager::SnapshotManager(const std::string& snapshot_dir) :
   db_(NULL),
+  it_(NULL),
   snapshot_dir_(snapshot_dir) { }
 
 SnapshotManager::~SnapshotManager() {
@@ -57,6 +58,43 @@ bool SnapshotManager::GetSnapshotMeta(SnapshotMeta* meta) {
 
 bool SnapshotManager::ApplySnapshot() { return true; }
 
+bool SnapshotManager::AddUserDataRecord(const std::string& key, const std::string& val) {
+  assert(db_);
+  std::string snapshot_key = kDataPrefix + key;
+  leveldb::Status s = db_->Put(leveldb::WriteOptions(), snapshot_key, val);
+  return s.ok();
+}
+
+bool SnapshotManager::AddMetaDataRecord(const SnapshotMeta& meta) {
+  assert(db_);
+  std::string val;
+  meta.SerializeToString(&val);
+  leveldb::Status s = db_->Put(leveldb::WriteOptions(), kMetaPrefix, val);
+  return s.ok();
+}
+
+bool SnapshotManager::GetNextUserDataRecord(std::string* key, std::string* val) {
+  if (!it_) {
+    it_ = db_->NewIterator(leveldb::ReadOptions());
+    it_->Seek(kDataPrefix);
+  }
+  if (it_->Valid()) {
+    leveldb::Slice slice = it_->key();
+    *key = std::string(slice.data(), slice.size());
+    slice = it_->value();
+    *val = std::string(slice.data(), slice.size());
+    it_->Next();
+    return true;
+  } else {
+    delete it_;
+    return false;
+  }
+}
+
+bool SnapshotManager::GetMetaDataRecord(std::string* val) {
+  leveldb::Status s = db_->Get(leveldb::ReadOptions(), kMetaPrefix, val);
+  return s.ok();
+}
 
 } // ins
 } // galaxy

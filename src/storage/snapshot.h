@@ -18,10 +18,15 @@ public:
   bool LoadSnapshot();
   bool GetSnapshotMeta(SnapshotMeta* meta);
   bool ApplySnapshot();
+  bool AddUserDataRecord(const std::string& key, const std::string& val);
+  bool AddMetaDataRecord(const SnapshotMeta& meta);
+  bool GetNextUserDataRecord(std::string* key, std::string* val);
+  bool GetMetaDataRecord(std::string* val);
 private:
   bool DeleteSnapshot();
 private:
   leveldb::DB* db_;
+  leveldb::Iterator* it_;
   std::string snapshot_dir_;
 };
 
