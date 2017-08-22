@@ -56,6 +56,13 @@ message Entry {
     optional string user = 5;
 }
 
+message SnapshotMeta {
+    required int64 term = 1;
+    required int64 log_index = 2;
+    required string voted = 3;
+    repeated string membership = 4;
+}
+
 message StatInfo {
     optional int64 current_stat = 1;
     optional int64 average_stat = 2;

@@ -28,6 +28,7 @@ namespace ins {
 
 class Meta;
 class BinLogger;
+class SnapshotManager;
 
 struct ClientAck {
     galaxy::ins::PutResponse* response;
@@ -326,6 +327,7 @@ private:
     Meta* meta_;
     BinLogger* binlogger_;
     UserManager* user_manager_;
+    SnapshotManager* snapshot_manager_;
     //for leaders
     StorageManager* data_store_;
     ThreadPool replicatter_;

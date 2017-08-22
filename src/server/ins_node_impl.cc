@@ -13,8 +13,9 @@
 #include <sofa/pbrpc/pbrpc.h>
 #include "common/this_thread.h"
 #include "common/timer.h"
-#include "storage/meta.h"
 #include "storage/binlog.h"
+#include "storage/meta.h"
+#include "storage/snapshot.h"
 
 DECLARE_string(ins_data_dir);
 DECLARE_string(ins_binlog_dir);
@@ -36,6 +37,7 @@ DECLARE_int64(min_log_gap);
 DECLARE_bool(ins_quiet_mode);
 DECLARE_bool(ins_enable_log_compaction);
 DECLARE_int32(ins_add_new_node_timeout);
+DECLARE_string(ins_snapshot_dir);
 
 const std::string tag_last_applied_index = "#TAG_LAST_APPLIED_INDEX#";
 
@@ -121,6 +123,23 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
     if (status == kOk) {
         last_applied_index_ =  BinLogger::StringToInt(tag_value);
     }
+
+    // try load snapshot
+    snapshot_manager_ = new SnapshotManager(FLAGS_ins_snapshot_dir);
+    SnapshotMeta snapshot_meta;
+    bool has_snapshot = snapshot_manager_->GetSnapshotMeta(&snapshot_meta);
+    if (!has_snapshot) {
+      LOG(WARNING, "dont have available snapshot in %s", FLAGS_ins_snapshot_dir.c_str());
+    } else {
+      if (snapshot_meta.log_index() > last_applied_index_) {
+        LOG(INFO, "load snapshot in %s, term: %ld, last_applied_index: %ld",
+            FLAGS_ins_snapshot_dir.c_str(), snapshot_meta.term(), snapshot_meta.log_index());
+        // apply snapshot into state machine
+        snapshot_manager_->ApplySnapshot();
+        //TODO update membershp
+      }
+    }
+
     server_start_timestamp_ = ins_common::timer::get_micros();
     committer_.AddTask(boost::bind(&InsNodeImpl::CommitIndexObserv, this));
     MutexLock lock(&mu_);

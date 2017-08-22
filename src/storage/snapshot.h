@@ -1,6 +1,7 @@
 #ifndef GALAXY_INS_SNAPSHOT_H_
 #define GALAXY_INS_SNAPSHOT_H_
 
+#include "leveldb/db.h"
 #include "proto/ins_node.pb.h"
 
 namespace galaxy {
@@ -11,12 +12,16 @@ class Meta;
 
 class SnapshotManager {
 public:
-  SnapshotManager();
+  SnapshotManager(const std::string& snapshot_dir);
   bool AddSnapshot();
   bool LoadSnapshot();
+  bool GetSnapshotMeta(SnapshotMeta* meta);
+  bool ApplySnapshot();
 private:
   bool DeleteSnapshot();
-
+private:
+  leveldb::DB* db_;
+  std::string snapshot_dir_;
 };
 
 } // ins
