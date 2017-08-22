@@ -21,29 +21,38 @@ bool SnapshotManager::AddSnapshot() { return true; }
 
 bool SnapshotManager::LoadSnapshot() { return true; }
 
-bool SnapshotManager::DeleteSnapshot() { return true; }
+bool SnapshotManager::DeleteSnapshot() {
+  if (db_) {
+    delete db_;
+    db_ = NULL;
+  }
+  leveldb::Status status = leveldb::DestroyDB(snapshot_dir_, leveldb::Options());
+  return status.ok();
+}
 
 bool SnapshotManager::GetSnapshotMeta(SnapshotMeta* meta) {
-    bool ok = ins_common::Mkdirs(snapshot_dir_.c_str());
-    if (!ok) {
-        LOG(FATAL, "failed to create dir :%s", snapshot_dir_.c_str());
-        abort();
-    }
-    leveldb::Options options;
-    options.create_if_missing = false;
-    leveldb::Status status = leveldb::DB::Open(options, snapshot_dir_, &db_);
-    if (!status.ok()) {
-      LOG(INFO, "don't have snapshot db in dir %s", snapshot_dir_.c_str());
-      return false;
-    }
-    assert(db_);
-    std::string meta_value;
-    status = db_->Get(leveldb::ReadOptions(), kMetaPrefix, &meta_value);
-    if (!status.ok()) {
-      return false;
-    }
+  bool ok = ins_common::Mkdirs(snapshot_dir_.c_str());
+  if (!ok) {
+    LOG(FATAL, "failed to create dir :%s", snapshot_dir_.c_str());
+    abort();
+  }
+  leveldb::Options options;
+  options.create_if_missing = false;
+  leveldb::Status status = leveldb::DB::Open(options, snapshot_dir_, &db_);
+  if (!status.ok()) {
+    LOG(INFO, "don't have snapshot db in dir %s", snapshot_dir_.c_str());
+    return false;
+  }
+  assert(db_);
+  std::string meta_value;
+  status = db_->Get(leveldb::ReadOptions(), kMetaPrefix, &meta_value);
+  if (!status.ok()) {
+    return false;
+  }
+  if (meta) {
     meta->ParseFromString(meta_value);
-    return true;
+  }
+  return true;
 }
 
 bool SnapshotManager::ApplySnapshot() { return true; }
