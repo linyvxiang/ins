@@ -283,6 +283,7 @@ private:
                          const char* action);
     void WriteMembershipChangeLog(const std::string& new_node_addr);
     const std::vector<std::string>& GetMembership(int64_t log_idx);
+    void CheckMembershipChangeFailure();
 public:
     std::vector<std::string> members_;
 private:
@@ -294,14 +295,19 @@ private:
         const ::google::protobuf::Message* request;
         ::google::protobuf::Message* response;
         ::google::protobuf::Closure* done;
+        int64_t timer_id;
+        int64_t log_index;
         MemebrshipChangeContext(::google::protobuf::RpcController* cont,
                                 const ::google::protobuf::Message* req,
                                 ::google::protobuf::Message* res,
-                                ::google::protobuf::Closure* d) :
+                                ::google::protobuf::Closure* d,
+                                int64_t tid) :
             controller(cont),
             request(req),
             response(res),
-            done(d) {}
+            done(d),
+            timer_id(tid),
+            log_index(-1) { }
         ~MemebrshipChangeContext() { }
     };
     MemebrshipChangeContext* membership_change_context_;

@@ -35,6 +35,7 @@ DECLARE_double(ins_trace_ratio);
 DECLARE_int64(min_log_gap);
 DECLARE_bool(ins_quiet_mode);
 DECLARE_bool(ins_enable_log_compaction);
+DECLARE_int32(ins_add_new_node_timeout);
 
 const std::string tag_last_applied_index = "#TAG_LAST_APPLIED_INDEX#";
 
@@ -418,10 +419,10 @@ void InsNodeImpl::CommitIndexObserv() {
                 }
                 if (ack.add_node_response) {
                     assert(log_entry.op == kAddNode);
-
                     ack.add_node_response->set_success(true);
                     ack.done->Run();
                     assert(membership_change_context_);
+                    replicatter_.CancelTask(membership_change_context_->timer_id);
                     delete membership_change_context_;
                     membership_change_context_ = NULL;
 
@@ -2275,16 +2276,18 @@ void InsNodeImpl::AddNode(::google::protobuf::RpcController* controller,
         done->Run();
         return;
     }
-    membership_change_context_ =
-        new MemebrshipChangeContext(controller, request, response, done);
 
+    int64_t id =
+      replicatter_.DelayTask(FLAGS_ins_add_new_node_timeout * 1000,
+                             boost::bind(&InsNodeImpl::CheckMembershipChangeFailure, this));
+    membership_change_context_ =
+        new MemebrshipChangeContext(controller, request, response, done, id);
     const std::string& new_node_addr = request->node_addr();
     next_index_[new_node_addr] = 0;
     match_index_[new_node_addr] = -1;
     LOG(INFO, "try to add node %s", new_node_addr.c_str());
     replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog, this, new_node_addr));
     //done->Run() will be called when memberhsip change is finished
-    //TODO add delay task to check membership change failure
 }
 
 void InsNodeImpl::RemoveNode(::google::protobuf::RpcController* controller,
@@ -2309,6 +2312,7 @@ void InsNodeImpl::WriteMembershipChangeLog(const std::string& new_node_addr) {
     binlogger_->AppendEntry(log_entry);
 
     int64_t cur_index = binlogger_->GetLength() - 1;
+    membership_change_context_->log_index = cur_index;
     ClientAck& ack = client_ack_[cur_index];
     ack.done = membership_change_context_->done;
     ack.add_node_response =
@@ -2336,6 +2340,25 @@ const std::vector<std::string>& InsNodeImpl::GetMembership(int64_t log_idx) {
   }
   assert(last_it->first <= log_idx);
   return last_it->second;
+}
+
+void InsNodeImpl::CheckMembershipChangeFailure() {
+  MutexLock lock(&mu_);
+  if (!membership_change_context_) {
+    return;
+  }
+  LOG(INFO, "membership change timeout");
+  replicatter_.CancelTask(membership_change_context_->timer_id);
+  int64_t log_index = membership_change_context_->log_index;
+  assert(client_ack_.find(log_index) != client_ack_.end());
+  ClientAck& ack = client_ack_[log_index];
+  ack.add_node_response->set_success(false);
+  ack.done->Run();
+  client_ack_.erase(log_index);
+  assert(membership_change_context_);
+  delete membership_change_context_;
+  membership_change_context_ = NULL;
+
 }
 
 } //namespace ins
