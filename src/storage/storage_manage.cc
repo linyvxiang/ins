@@ -88,6 +88,23 @@ void StorageManager::CloseDatabase(const std::string& name) {
     dbs_.erase(dbs_it);
 }
 
+void StorageManager::Reset() {
+    MutexLock lock(&mu_);
+    std::map<std::string, leveldb::DB*>::iterator it;
+    for (it = dbs_.begin(); it != dbs_.end(); ++it) {
+        delete it->second;
+        it->second = NULL;
+    }
+    dbs_.clear();
+}
+
+bool StorageManager::DestroyStorageManager(const std::string& storage_path) {
+    //TODO destroy all dbs
+    leveldb::Status s =
+      leveldb::DestroyDB(StorageManager::anonymous_user + "/@db", leveldb::Options());
+    return s.ok();
+}
+
 Status StorageManager::Get(const std::string& name,
                            const std::string& key,
                            std::string* value) {

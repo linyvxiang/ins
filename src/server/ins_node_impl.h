@@ -286,6 +286,7 @@ private:
     void WriteMembershipChangeLog(const std::string& new_node_addr);
     const std::vector<std::string>& GetMembership(int64_t log_idx);
     void CheckMembershipChangeFailure();
+    bool LoadSnapshot();
 public:
     std::vector<std::string> members_;
 private:

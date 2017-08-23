@@ -124,22 +124,6 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
         last_applied_index_ =  BinLogger::StringToInt(tag_value);
     }
 
-    // try load snapshot
-    snapshot_manager_ = new SnapshotManager(FLAGS_ins_snapshot_dir + "/" + self_id_);
-    SnapshotMeta snapshot_meta;
-    bool has_snapshot = snapshot_manager_->GetSnapshotMeta(&snapshot_meta);
-    if (!has_snapshot) {
-      LOG(WARNING, "don't have available snapshot in %s", FLAGS_ins_snapshot_dir.c_str());
-    } else {
-      if (snapshot_meta.log_index() > last_applied_index_) {
-        LOG(INFO, "load snapshot in %s, term: %ld, last_applied_index: %ld",
-            FLAGS_ins_snapshot_dir.c_str(), snapshot_meta.term(), snapshot_meta.log_index());
-        // apply snapshot into state machine
-        snapshot_manager_->ApplySnapshot();
-        //TODO update membershp
-      }
-    }
-
     server_start_timestamp_ = ins_common::timer::get_micros();
     committer_.AddTask(boost::bind(&InsNodeImpl::CommitIndexObserv, this));
     MutexLock lock(&mu_);
@@ -2377,7 +2361,73 @@ void InsNodeImpl::CheckMembershipChangeFailure() {
   assert(membership_change_context_);
   delete membership_change_context_;
   membership_change_context_ = NULL;
+}
 
+bool InsNodeImpl::LoadSnapshot() {
+  MutexLock lock(&mu_);
+  SnapshotMeta snapshot_meta;
+  bool has_snapshot = snapshot_manager_->GetSnapshotMeta(&snapshot_meta);
+  if (!has_snapshot) {
+    LOG(WARNING, "don't have available snapshot in %s", FLAGS_ins_snapshot_dir.c_str());
+    return false;
+  } else {
+    LOG(INFO, "load snapshot in %s, term: %ld, last_applied_index: %ld",
+        FLAGS_ins_snapshot_dir.c_str(), snapshot_meta.term(), snapshot_meta.log_index());
+    data_store_->Reset();
+    std::string sub_dir = self_id_;
+    boost::replace_all(sub_dir, ":", "_");
+    std::string data_store_path = FLAGS_ins_data_dir + "/"
+      + sub_dir + "/store" ;
+    bool ret = StorageManager::DestroyStorageManager(data_store_path);
+    if (!ret) {
+      LOG(WARNING, "destroy storage manager in %s fail", data_store_path.c_str());
+      return false;
+    } else {
+      // apply snapshot into state machine
+      std::string key;
+      std::string val;
+      while (snapshot_manager_->GetNextUserDataRecord(&key, &val)) {
+        Status status = data_store_->Put(StorageManager::anonymous_user,
+            key, val);
+        if (status != kOk) {
+          LOG(WARNING, "apply key: %s val: %s in snapshot failed",
+              key.c_str(), val.c_str());
+          return false;
+        }
+      }
+
+      members_.clear();
+      bool self_in_cluster = false;
+      for (int i = 0; i < snapshot_meta.membership_size(); i++) {
+        members_.push_back(snapshot_meta.membership(i));
+        if (self_id_ == members_[i]) {
+          LOG(INFO, "cluster member[Self]: %s", members_[i].c_str());
+          self_in_cluster = true;
+        } else {
+          LOG(INFO, "cluster member: %s", members_[i].c_str());
+        }
+      }
+      if (!self_in_cluster) {
+        LOG(FATAL, "this node is not in cluster membership,"
+            " please check your configuration. self: %s",
+            self_id_.c_str());
+        return false;
+      }
+
+      meta_->WriteCurrentTerm(snapshot_meta.term());
+      meta_->WriteVotedFor(snapshot_meta.term(), snapshot_meta.voted());
+      Status status = data_store_->Put(StorageManager::anonymous_user,
+          tag_last_applied_index,
+          BinLogger::IntToString(snapshot_meta.log_index()));
+      if (status == kOk) {
+        last_applied_index_ = snapshot_meta.log_index();
+      } else {
+        LOG(FATAL, "write last_applied_index %ld fail", snapshot_meta.log_index());
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 } //namespace ins

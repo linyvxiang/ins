@@ -18,6 +18,8 @@ public:
 
     bool OpenDatabase(const std::string& name);
     void CloseDatabase(const std::string& name);
+    void Reset();
+    static bool DestroyStorageManager(const std::string& name);
 
     Status Get(const std::string& name, const std::string& key, std::string* value);
     Status Put(const std::string& name, const std::string& key, const std::string& value);
