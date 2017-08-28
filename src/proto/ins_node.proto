@@ -290,6 +290,20 @@ message RemoveNodeResponse {
     optional string leader_id = 2;
 }
 
+message SnapshotItem {
+    required string key = 1;
+    required string val = 2;
+}
+
+message InstallSnapshotRequest {
+    required int64 timestamp = 1;
+    repeated SnapshotItem items = 2;
+}
+
+message InstallSnapshotResponse {
+    required bool success = 1;
+}
+
 service InsNode {
     rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
     rpc Vote(VoteRequest) returns (VoteResponse);
@@ -309,5 +323,6 @@ service InsNode {
     rpc RpcStat(RpcStatRequest) returns (RpcStatResponse);
     rpc AddNode(AddNodeRequest) returns (AddNodeResponse);
     rpc RemoveNode(RemoveNodeRequest) returns (RemoveNodeResponse);
+    rpc InstallSnapshot(InstallSnapshotRequest) returns (InstallSnapshotResponse);
 }
 

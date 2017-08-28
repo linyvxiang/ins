@@ -905,7 +905,7 @@ void InsNodeImpl::ReplicateLog(std::string follower_id) {
             break;
         }
         if (status_ != kLeader) {
-            LOG(INFO, "stop realicate log, no longger leader"); 
+            LOG(INFO, "stop realicate log, no longger leader");
             break;
         }
         int64_t index = next_index_[follower_id];
@@ -924,12 +924,16 @@ void InsNodeImpl::ReplicateLog(std::string follower_id) {
         if (prev_index > -1) {
             bool slot_ok = binlogger_->ReadSlot(prev_index, &prev_log_entry);
             if (!slot_ok) {
-                LOG(FATAL, "bad slot [%ld], can't replicate on %s ", 
+                //maybe we should send a snapshot
+                //TODO make return value of ReadSlot indicate log lost or doesn't exist
+                replicating_.erase(follower_id);
+                TrySendSnapshot();
+                LOG(WARNING, "bad slot [%ld], can't replicate on %s ",
                     prev_index, follower_id.c_str());
-                break;
+                return;
             }
             prev_term = prev_log_entry.term;
-        } 
+        }
         mu_.Unlock();
 
         InsNode_Stub* stub;
@@ -2306,6 +2310,13 @@ void InsNodeImpl::RemoveNode(::google::protobuf::RpcController* controller,
 
 }
 
+
+void InsNodeImpl::InstallSnapshot(::google::protobuf::RpcController* controller,
+                     const ::galaxy::ins::InstallSnapshotRequest* request,
+                     ::galaxy::ins::InstallSnapshotResponse* response,
+                     ::google::protobuf::Closure* done) {
+}
+
 void InsNodeImpl::WriteMembershipChangeLog(const std::string& new_node_addr) {
     MutexLock lock(&mu_);
     if (!membership_change_context_) {
@@ -2500,6 +2511,9 @@ void InsNodeImpl::WriteSnapshotInterval() {
   }
   replicatter_.DelayTask(FLAGS_ins_snapshot_interval * 1000,
                          boost::bind(&InsNodeImpl::WriteSnapshotInterval, this));
+}
+
+void InsNodeImpl::TrySendSnapshot() {
 }
 
 } //namespace ins

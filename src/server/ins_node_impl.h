@@ -218,7 +218,10 @@ public:
                  const ::galaxy::ins::RemoveNodeRequest* request,
                  ::galaxy::ins::RemoveNodeResponse* response,
                  ::google::protobuf::Closure* done);
-
+    void InstallSnapshot(::google::protobuf::RpcController* controller,
+                         const ::galaxy::ins::InstallSnapshotRequest* request,
+                         ::galaxy::ins::InstallSnapshotResponse* response,
+                         ::google::protobuf::Closure* done);
 private:
     void VoteCallback(const ::galaxy::ins::VoteRequest* request,
                       ::galaxy::ins::VoteResponse* response,
@@ -289,6 +292,7 @@ private:
     bool LoadSnapshot();
     bool WriteSnapshot();
     void WriteSnapshotInterval();
+    void TrySendSnapshot();
 public:
     std::vector<std::string> members_;
 private:
