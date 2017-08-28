@@ -287,6 +287,7 @@ private:
     const std::vector<std::string>& GetMembership(int64_t log_idx);
     void CheckMembershipChangeFailure();
     bool LoadSnapshot();
+    bool WriteSnapshot();
 public:
     std::vector<std::string> members_;
 private:
@@ -359,6 +360,7 @@ private:
     bool single_node_mode_;
     int64_t last_safe_clean_index_;
     PerformanceCenter perform_;
+    Mutex snapshot_lock_mu_;
 };
 
 } //namespace ins

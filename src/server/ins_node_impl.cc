@@ -227,6 +227,7 @@ inline std::string InsNodeImpl::GetKeyFromEvent(const std::string& event_key) {
 }
 
 void InsNodeImpl::CommitIndexObserv() {
+    MutexLock snapshot_lock(&snapshot_lock_mu_);
     MutexLock lock(&mu_);
     while (!stop_) {
         while (!stop_ && commit_index_ <=  last_applied_index_) {
@@ -2426,6 +2427,61 @@ bool InsNodeImpl::LoadSnapshot() {
         return false;
       }
     }
+  }
+  return true;
+}
+
+bool InsNodeImpl::WriteSnapshot() {
+  //we *must* hold snapshot lock first,
+  //when we hold the lock we can make sure that
+  //the apply worker is not working
+  //so the meta for the snapshot keeps consistent
+  //TODO use conditional var optimize the lock
+  MutexLock snapshot_lock(&snapshot_lock_mu_);
+  std::vector<std::string> members;
+  int64_t last_applied_index;
+  int64_t current_term;
+  std::string voted;
+  StorageManager::Iterator* it = NULL;
+  {
+    MutexLock lock(&mu_);
+    last_applied_index = last_applied_index_;
+    current_term = current_term_;
+    voted = voted_for_[current_term_];
+    it = data_store_->NewIterator(StorageManager::anonymous_user);
+    members = members_;
+  }
+
+  if (!snapshot_manager_->DeleteSnapshot()) {
+    LOG(WARNING, "delete old snapshot fail");
+    return false;
+  }
+  if (!snapshot_manager_->AddSnapshot()) {
+    LOG(WARNING, "create new snapshot fail");
+    return false;
+  }
+  while (it->Valid()) {
+    const std::string& key = it->key();
+    const std::string& val = it->value();
+    if (!snapshot_manager_->AddUserDataRecord(key, val)) {
+      LOG(WARNING, "write snapshot key: %s val: %s fail", key.c_str(), val.c_str());
+      delete it;
+      return false;
+    }
+    it->Next();
+  }
+  delete it;
+  it = NULL;
+  SnapshotMeta meta;
+  meta.set_term(current_term);
+  meta.set_log_index(last_applied_index);
+  meta.set_voted(voted);
+  for (size_t i = 0; i < members.size(); i++) {
+    meta.add_membership(members[i]);
+  }
+  if (!snapshot_manager_->AddMetaDataRecord(meta)) {
+    LOG(WARNING, "write snapshot meta fail");
+    return false;
   }
   return true;
 }

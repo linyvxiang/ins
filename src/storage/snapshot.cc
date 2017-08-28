@@ -18,7 +18,16 @@ SnapshotManager::~SnapshotManager() {
   db_ = NULL;
 }
 
-bool SnapshotManager::AddSnapshot() { return true; }
+bool SnapshotManager::AddSnapshot() {
+  leveldb::Options options;
+  options.create_if_missing = false;
+  leveldb::Status status = leveldb::DB::Open(options, snapshot_dir_, &db_);
+  if (!status.ok()) {
+    LOG(WARNING, "create new snapshot in %s fail", snapshot_dir_.c_str());
+    return false;
+  }
+  return true;
+}
 
 bool SnapshotManager::LoadSnapshot() { return true; }
 

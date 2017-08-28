@@ -22,7 +22,6 @@ public:
   bool AddMetaDataRecord(const SnapshotMeta& meta);
   bool GetNextUserDataRecord(std::string* key, std::string* val);
   bool GetMetaDataRecord(std::string* val);
-private:
   bool DeleteSnapshot();
 private:
   leveldb::DB* db_;
