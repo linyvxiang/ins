@@ -16,6 +16,7 @@ public:
   ~SnapshotManager();
   bool AddSnapshot();
   bool LoadSnapshot();
+  bool CloseSnapshot();
   bool GetSnapshotMeta(SnapshotMeta* meta);
   bool ApplySnapshot();
   bool AddUserDataRecord(const std::string& key, const std::string& val);

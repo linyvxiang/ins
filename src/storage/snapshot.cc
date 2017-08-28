@@ -31,6 +31,14 @@ bool SnapshotManager::AddSnapshot() {
 
 bool SnapshotManager::LoadSnapshot() { return true; }
 
+bool SnapshotManager::CloseSnapshot() {
+  if (db_) {
+    delete db_;
+    db_ = NULL;
+  }
+  return true;
+}
+
 bool SnapshotManager::DeleteSnapshot() {
   if (db_) {
     delete db_;
