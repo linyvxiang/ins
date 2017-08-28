@@ -37,6 +37,8 @@ DECLARE_int64(min_log_gap);
 DECLARE_bool(ins_quiet_mode);
 DECLARE_bool(ins_enable_log_compaction);
 DECLARE_int32(ins_add_new_node_timeout);
+DECLARE_bool(ins_enable_snapshot);
+DECLARE_int32(ins_snapshot_interval);
 DECLARE_string(ins_snapshot_dir);
 
 const std::string tag_last_applied_index = "#TAG_LAST_APPLIED_INDEX#";
@@ -137,6 +139,9 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
         binlog_cleaner_.AddTask(
             boost::bind(&InsNodeImpl::GarbageClean, this)
         );
+    }
+    if (FLAGS_ins_enable_snapshot) {
+        replicatter_.AddTask(boost::bind(&InsNodeImpl::WriteSnapshotInterval, this));
     }
 }
 
@@ -2484,6 +2489,17 @@ bool InsNodeImpl::WriteSnapshot() {
     return false;
   }
   return true;
+}
+
+void InsNodeImpl::WriteSnapshotInterval() {
+  bool ret = WriteSnapshot();
+  if (!ret) {
+    LOG(WARNING, "write snapshot fail");
+  } else {
+    LOG(INFO, "write snapshot success");
+  }
+  replicatter_.DelayTask(FLAGS_ins_snapshot_interval * 1000,
+                         boost::bind(&InsNodeImpl::WriteSnapshotInterval, this));
 }
 
 } //namespace ins

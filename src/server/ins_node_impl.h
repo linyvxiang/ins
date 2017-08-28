@@ -288,6 +288,7 @@ private:
     void CheckMembershipChangeFailure();
     bool LoadSnapshot();
     bool WriteSnapshot();
+    void WriteSnapshotInterval();
 public:
     std::vector<std::string> members_;
 private:

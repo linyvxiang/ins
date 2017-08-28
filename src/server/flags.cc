@@ -31,7 +31,9 @@ DEFINE_int64(min_log_gap, 100, "min log gap for catchup");
 DEFINE_bool(ins_quiet_mode, false, "start in quiet mode");
 DEFINE_bool(ins_enable_log_compaction, false, "enable log compactoin");
 DEFINE_int32(ins_add_new_node_timeout, 60, "timeout for add new node(in second)");
+DEFINE_bool(ins_enable_snapshot, false, "enable snapshot on state machine");
 DEFINE_string(ins_snapshot_dir, "snapshot", "directory for snapshot");
+DEFINE_int32(ins_snapshot_interval, 1800, "snapshot interval(in second)");
 
 //ins_cli only
 DEFINE_string(ins_cmd, "", "the command of inc shell");
