@@ -23,7 +23,10 @@ public:
   bool AddMetaDataRecord(const SnapshotMeta& meta);
   bool GetNextUserDataRecord(std::string* key, std::string* val);
   bool GetMetaDataRecord(std::string* val);
+  //TODO merge with AddSnapshot
   bool DeleteSnapshot();
+  const std::string& GetMetaDataPrefix();
+  const std::string& GetUserDataPrefix();
 private:
   leveldb::DB* db_;
   leveldb::Iterator* it_;

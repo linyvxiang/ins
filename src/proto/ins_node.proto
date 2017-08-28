@@ -298,6 +298,7 @@ message SnapshotItem {
 message InstallSnapshotRequest {
     required int64 timestamp = 1;
     repeated SnapshotItem items = 2;
+    required bool is_last = 3;
 }
 
 message InstallSnapshotResponse {

@@ -67,7 +67,8 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
                              last_applied_index_(-1),
                              single_node_mode_(false),
                              last_safe_clean_index_(-1),
-                             perform_(FLAGS_performance_buffer_size) {
+                             perform_(FLAGS_performance_buffer_size),
+                             doing_snapshot_timestamp_(-1) {
     srand(time(NULL));
     replication_cond_ = new CondVar(&mu_);
     commit_cond_ = new CondVar(&mu_);
@@ -2315,6 +2316,40 @@ void InsNodeImpl::InstallSnapshot(::google::protobuf::RpcController* controller,
                      const ::galaxy::ins::InstallSnapshotRequest* request,
                      ::galaxy::ins::InstallSnapshotResponse* response,
                      ::google::protobuf::Closure* done) {
+  MutexLock snapshot_lock(&snapshot_lock_mu_);
+  if (doing_snapshot_timestamp_ != -1) {
+    if (doing_snapshot_timestamp_ != request->timestamp()) {
+      LOG(WARNING, "we are installing snapshot %ld, refuse new snapshot %ld",
+          doing_snapshot_timestamp_, request->timestamp());
+      response->set_success(false);
+      done->Run();
+      return;
+    }
+  } else {
+    doing_snapshot_timestamp_ = request->timestamp();
+    snapshot_manager_->DeleteSnapshot();
+    snapshot_manager_->AddSnapshot();
+  }
+
+  for (int i = 0; i < request->items_size(); i++) {
+    const SnapshotItem& item = request->items(i);
+    // meta data should be sned at last
+    // TODO check retur val here;
+    if (item.key() == snapshot_manager_->GetMetaDataPrefix()) {
+      SnapshotMeta meta;
+      meta.ParseFromString(item.val());
+      snapshot_manager_->AddMetaDataRecord(meta);
+    } else {
+      snapshot_manager_->AddUserDataRecord(item.key(), item.val());
+    }
+  }
+  if (request->is_last()) {
+    snapshot_manager_->CloseSnapshot();
+    doing_snapshot_timestamp_ = -1;
+    snapshot_manager_->LoadSnapshot();
+  }
+  response->set_success(true);
+  done->Run();
 }
 
 void InsNodeImpl::WriteMembershipChangeLog(const std::string& new_node_addr) {
@@ -2514,6 +2549,7 @@ void InsNodeImpl::WriteSnapshotInterval() {
 }
 
 void InsNodeImpl::TrySendSnapshot() {
+
 }
 
 } //namespace ins

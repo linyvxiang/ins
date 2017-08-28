@@ -113,5 +113,13 @@ bool SnapshotManager::GetMetaDataRecord(std::string* val) {
   return s.ok();
 }
 
+const std::string& SnapshotManager::GetMetaDataPrefix() {
+  return kMetaPrefix;
+}
+
+const std::string& SnapshotManager::GetUserDataPrefix() {
+  return kDataPrefix;
+}
+
 } // ins
 } // galaxy

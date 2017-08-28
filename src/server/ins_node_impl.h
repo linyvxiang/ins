@@ -366,6 +366,7 @@ private:
     int64_t last_safe_clean_index_;
     PerformanceCenter perform_;
     Mutex snapshot_lock_mu_;
+    int64_t doing_snapshot_timestamp_;
 };
 
 } //namespace ins
