@@ -60,6 +60,7 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
                              meta_(NULL),
                              binlogger_(NULL),
                              user_manager_(NULL),
+                             snapshot_manager_(NULL),
                              replicatter_(FLAGS_max_cluster_size),
                              heartbeat_read_timestamp_(0),
                              in_safe_mode_(true),
@@ -120,6 +121,7 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
     data_store_ = new StorageManager(data_store_path);
     UserInfo root = meta_->ReadRootInfo();
     user_manager_ = new UserManager(data_store_path, root);
+    snapshot_manager_ = new SnapshotManager(FLAGS_ins_snapshot_dir + "/" + sub_dir);
     std::string tag_value;
     Status status = data_store_->Get(StorageManager::anonymous_user,
                                      tag_last_applied_index,
@@ -234,7 +236,6 @@ inline std::string InsNodeImpl::GetKeyFromEvent(const std::string& event_key) {
 }
 
 void InsNodeImpl::CommitIndexObserv() {
-    MutexLock snapshot_lock(&snapshot_lock_mu_);
     MutexLock lock(&mu_);
     while (!stop_) {
         while (!stop_ && commit_index_ <=  last_applied_index_) {
@@ -257,133 +258,136 @@ void InsNodeImpl::CommitIndexObserv() {
             std::string type_and_value;
             std::string new_uuid;
             Status log_status = kError;
-            switch(log_entry.op) {
+            {
+              MutexLock snapshot_lock(&snapshot_lock_mu_);
+              switch(log_entry.op) {
                 case kPut:
                 case kLock:
-                    LOG(DEBUG, "add to data_store_, key: %s, value: %s, user: %s",
-                        log_entry.key.c_str(), log_entry.value.c_str(),
-                        log_entry.user.c_str());
-                    type_and_value.append(1, static_cast<char>(log_entry.op));
-                    type_and_value.append(log_entry.value);
-                    s = data_store_->Put(log_entry.user, log_entry.key, type_and_value);
-                    if (s == kUnknownUser) {
-                        if (data_store_->OpenDatabase(log_entry.user)) {
-                            s = data_store_->Put(log_entry.user, log_entry.key, type_and_value);
-                        }
+                  LOG(DEBUG, "add to data_store_, key: %s, value: %s, user: %s",
+                      log_entry.key.c_str(), log_entry.value.c_str(),
+                      log_entry.user.c_str());
+                  type_and_value.append(1, static_cast<char>(log_entry.op));
+                  type_and_value.append(log_entry.value);
+                  s = data_store_->Put(log_entry.user, log_entry.key, type_and_value);
+                  if (s == kUnknownUser) {
+                    if (data_store_->OpenDatabase(log_entry.user)) {
+                      s = data_store_->Put(log_entry.user, log_entry.key, type_and_value);
                     }
-                    if (log_entry.op == kLock) {
-                        TouchParentKey(log_entry.user, log_entry.key, 
-                                       log_entry.value, "lock");
-                    }
-                    event_trigger_.AddTask(
-                        boost::bind(&InsNodeImpl::TriggerEventWithParent,
-                                    this,
-                                    BindKeyAndUser(log_entry.user, log_entry.key),
-                                    log_entry.value, false)
-                    );
-                    if (log_entry.op == kLock) {
-                        MutexLock lock_sk(&session_locks_mu_);
-                        session_locks_[log_entry.value].insert(log_entry.key);
-                    }
-                    assert(s == kOk);
-                    break;
+                  }
+                  if (log_entry.op == kLock) {
+                    TouchParentKey(log_entry.user, log_entry.key, 
+                        log_entry.value, "lock");
+                  }
+                  event_trigger_.AddTask(
+                      boost::bind(&InsNodeImpl::TriggerEventWithParent,
+                        this,
+                        BindKeyAndUser(log_entry.user, log_entry.key),
+                        log_entry.value, false)
+                      );
+                  if (log_entry.op == kLock) {
+                    MutexLock lock_sk(&session_locks_mu_);
+                    session_locks_[log_entry.value].insert(log_entry.key);
+                  }
+                  assert(s == kOk);
+                  break;
                 case kDel:
-                    LOG(INFO, "delete from data_store_, key: %s",
-                        log_entry.key.c_str());
-                    s = data_store_->Delete(log_entry.user, log_entry.key);
-                    if (s == kUnknownUser) {
-                        if (data_store_->OpenDatabase(log_entry.user)) {
-                            s = data_store_->Delete(log_entry.user, log_entry.key);
-                        }
+                  LOG(INFO, "delete from data_store_, key: %s",
+                      log_entry.key.c_str());
+                  s = data_store_->Delete(log_entry.user, log_entry.key);
+                  if (s == kUnknownUser) {
+                    if (data_store_->OpenDatabase(log_entry.user)) {
+                      s = data_store_->Delete(log_entry.user, log_entry.key);
                     }
-                    assert(s == kOk);
-                    event_trigger_.AddTask(
-                        boost::bind(&InsNodeImpl::TriggerEventWithParent,
-                                    this,
-                                    BindKeyAndUser(log_entry.user, log_entry.key),
-                                    log_entry.value, true)
-                    );
-                    break;
+                  }
+                  assert(s == kOk);
+                  event_trigger_.AddTask(
+                      boost::bind(&InsNodeImpl::TriggerEventWithParent,
+                        this,
+                        BindKeyAndUser(log_entry.user, log_entry.key),
+                        log_entry.value, true)
+                      );
+                  break;
                 case kNop:
-                    LOG(DEBUG, "kNop got, do nothing, key: %s", 
-                              log_entry.key.c_str());
-                    {
-                        MutexLock locker(&mu_);
-                        if (log_entry.term == current_term_) {
-                            nop_committed = true;
-                        }
-                        LOG(INFO, "nop term: %ld, cur term: %ld", 
-                            log_entry.term, current_term_);
+                  LOG(DEBUG, "kNop got, do nothing, key: %s", 
+                      log_entry.key.c_str());
+                  {
+                    MutexLock locker(&mu_);
+                    if (log_entry.term == current_term_) {
+                      nop_committed = true;
                     }
-                    break;
+                    LOG(INFO, "nop term: %ld, cur term: %ld", 
+                        log_entry.term, current_term_);
+                  }
+                  break;
                 case kUnLock:
-                    {
-                        const std::string& key = log_entry.key;
-                        const std::string& old_session = log_entry.value;
-                        std::string value;
-                        s = data_store_->Get(log_entry.user, key, &value);
-                        if (s == kOk) {
-                            std::string cur_session;
-                            LogOperation op;
-                            ParseValue(value, op, cur_session);
-                            if (op == kLock && cur_session == old_session) { //DeleteIf
-                                s = data_store_->Delete(log_entry.user, key);
-                                if (s == kUnknownUser) {
-                                    if (data_store_->OpenDatabase(log_entry.user)) {
-                                       s = data_store_->Delete(log_entry.user, key); 
-                                    }
-                                }
-                                assert(s == kOk);
-                                LOG(INFO, "unlock on %s", key.c_str());
-                                TouchParentKey(log_entry.user, log_entry.key, 
-                                               cur_session, "unlock");
-                                event_trigger_.AddTask(
-                                  boost::bind(&InsNodeImpl::TriggerEventWithParent,
-                                              this,
-                                              BindKeyAndUser(log_entry.user, key),
-                                              old_session, true)
-                                );
-                            }
+                  {
+                    const std::string& key = log_entry.key;
+                    const std::string& old_session = log_entry.value;
+                    std::string value;
+                    s = data_store_->Get(log_entry.user, key, &value);
+                    if (s == kOk) {
+                      std::string cur_session;
+                      LogOperation op;
+                      ParseValue(value, op, cur_session);
+                      if (op == kLock && cur_session == old_session) { //DeleteIf
+                        s = data_store_->Delete(log_entry.user, key);
+                        if (s == kUnknownUser) {
+                          if (data_store_->OpenDatabase(log_entry.user)) {
+                            s = data_store_->Delete(log_entry.user, key); 
+                          }
                         }
-                    }
-                    break;
-                case kLogin:
-                    log_status = user_manager_->Login(log_entry.key,
-                                                      log_entry.value,
-                                                      log_entry.user);
-                    if (log_status == kOk) {
-                        new_uuid = log_entry.user;
-                        data_store_->OpenDatabase(log_entry.key);
-                    }
-                    break;
-                case kLogout:
-                    log_status = user_manager_->Logout(log_entry.user);
-                    break;
-                case kRegister:
-                    log_status = user_manager_->Register(log_entry.key, log_entry.value);
-                    break;
-                case kAddNode:
-                    {
-                      const std::string& new_node_addr = log_entry.key;
-                      LOG(INFO, "log idx %ld for add node %s has been committed",
-                                i, new_node_addr.c_str());
-                      mu_.Lock();
-                      members_.push_back(new_node_addr);
-                      mu_.Unlock();
-                      replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog,
-                                                       this, new_node_addr));
-                      if (new_node_addr == self_id_ && FLAGS_ins_quiet_mode) {
-                        // we are the new new comer, and has been add to the cluster
-                        // leave quiet mode and enable leader election
-                        FLAGS_ins_quiet_mode = false;
-                        mu_.Lock();
-                        CheckLeaderCrash();
-                        mu_.Unlock();
+                        assert(s == kOk);
+                        LOG(INFO, "unlock on %s", key.c_str());
+                        TouchParentKey(log_entry.user, log_entry.key, 
+                            cur_session, "unlock");
+                        event_trigger_.AddTask(
+                            boost::bind(&InsNodeImpl::TriggerEventWithParent,
+                              this,
+                              BindKeyAndUser(log_entry.user, key),
+                              old_session, true)
+                            );
                       }
-                      break;
                     }
+                  }
+                  break;
+                case kLogin:
+                  log_status = user_manager_->Login(log_entry.key,
+                      log_entry.value,
+                      log_entry.user);
+                  if (log_status == kOk) {
+                    new_uuid = log_entry.user;
+                    data_store_->OpenDatabase(log_entry.key);
+                  }
+                  break;
+                case kLogout:
+                  log_status = user_manager_->Logout(log_entry.user);
+                  break;
+                case kRegister:
+                  log_status = user_manager_->Register(log_entry.key, log_entry.value);
+                  break;
+                case kAddNode:
+                  {
+                    const std::string& new_node_addr = log_entry.key;
+                    LOG(INFO, "log idx %ld for add node %s has been committed",
+                        i, new_node_addr.c_str());
+                    mu_.Lock();
+                    members_.push_back(new_node_addr);
+                    mu_.Unlock();
+                    replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog,
+                          this, new_node_addr));
+                    if (new_node_addr == self_id_ && FLAGS_ins_quiet_mode) {
+                      // we are the new new comer, and has been add to the cluster
+                      // leave quiet mode and enable leader election
+                      FLAGS_ins_quiet_mode = false;
+                      mu_.Lock();
+                      CheckLeaderCrash();
+                      mu_.Unlock();
+                    }
+                    break;
+                  }
                 default:
-                    LOG(WARNING, "Unfamiliar op :%d", static_cast<int>(log_entry.op));
+                  LOG(WARNING, "Unfamiliar op :%d", static_cast<int>(log_entry.op));
+              }
             }
             mu_.Lock();
             if (status_ == kLeader && nop_committed) {

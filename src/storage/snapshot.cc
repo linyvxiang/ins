@@ -19,6 +19,11 @@ SnapshotManager::~SnapshotManager() {
 }
 
 bool SnapshotManager::AddSnapshot() {
+  bool ok = ins_common::Mkdirs(snapshot_dir_.c_str());
+  if (!ok) {
+    LOG(FATAL, "failed to create dir :%s", snapshot_dir_.c_str());
+    abort();
+  }
   leveldb::Options options;
   options.create_if_missing = true;
   leveldb::Status status = leveldb::DB::Open(options, snapshot_dir_, &db_);
