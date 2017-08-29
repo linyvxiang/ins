@@ -2334,7 +2334,7 @@ void InsNodeImpl::InstallSnapshot(::google::protobuf::RpcController* controller,
   for (int i = 0; i < request->items_size(); i++) {
     const SnapshotItem& item = request->items(i);
     // meta data should be sned at last
-    // TODO check retur val here;
+    // TODO check return value here;
     if (item.key() == snapshot_manager_->GetMetaDataPrefix()) {
       SnapshotMeta meta;
       meta.ParseFromString(item.val());
@@ -2416,6 +2416,7 @@ void InsNodeImpl::CheckMembershipChangeFailure() {
 }
 
 bool InsNodeImpl::LoadSnapshot() {
+  MutexLock snapshot_lock(&snapshot_lock_mu_);
   MutexLock lock(&mu_);
   SnapshotMeta snapshot_meta;
   bool has_snapshot = snapshot_manager_->GetSnapshotMeta(&snapshot_meta);
