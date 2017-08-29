@@ -1008,7 +1008,6 @@ void InsNodeImpl::ReplicateLog(std::string follower_id) {
                     next_index_[follower_id] + FLAGS_min_log_gap >=
                     binlogger_->GetLength()) {
                     // so this is a new comer and is suitable for join
-                    // TODO write a membership change log
                     // maybe already timeout, so check membership change context
                     if (!membership_change_context_) {
                         LOG(WARNING, "not in membership change, maybe already timeout");
@@ -2602,7 +2601,17 @@ void InsNodeImpl::TrySendSnapshot(const std::string& follower_id) {
     return;
   }
   delete stub;
-  //TODO add follower_id to replicatter task
+
+  SnapshotMeta snapshot_meta;
+  snapshot_meta.ParseFromString(meta_val);
+  {
+    MutexLock lock(&mu_);
+    next_index_[follower_id] = snapshot_meta.log_index() + 1;
+    match_index_[follower_id] = snapshot_meta.log_index();
+  }
+  //TODO make delay time configurable
+  replicatter_.DelayTask(60 * 1000,
+                         boost::bind(&InsNodeImpl::ReplicateLog, this, follower_id));
 }
 
 } //namespace ins
