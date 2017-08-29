@@ -20,7 +20,7 @@ SnapshotManager::~SnapshotManager() {
 
 bool SnapshotManager::AddSnapshot() {
   leveldb::Options options;
-  options.create_if_missing = false;
+  options.create_if_missing = true;
   leveldb::Status status = leveldb::DB::Open(options, snapshot_dir_, &db_);
   if (!status.ok()) {
     LOG(WARNING, "create new snapshot in %s fail", snapshot_dir_.c_str());
