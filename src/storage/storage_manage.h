@@ -55,6 +55,8 @@ public:
 
     Iterator *NewIterator(const std::string& name);
 private:
+    void OpenDefaultDB();
+private:
     Mutex mu_;
     std::string data_dir_;
     std::map<std::string, leveldb::DB*> dbs_;

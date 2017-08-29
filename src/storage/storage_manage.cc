@@ -16,13 +16,26 @@ namespace ins {
 const std::string StorageManager::anonymous_user = "";
 
 StorageManager::StorageManager(const std::string& data_dir) : data_dir_(data_dir) {
-    bool ok = ins_common::Mkdirs(data_dir.c_str());
+    OpenDefaultDB();
+}
+
+StorageManager::~StorageManager() {
+    MutexLock lock(&mu_);
+    for (std::map<std::string, leveldb::DB*>::iterator it = dbs_.begin();
+         it != dbs_.end(); ++it) {
+        delete it->second;
+        it->second = NULL;
+    }
+}
+
+void StorageManager::OpenDefaultDB() {
+    bool ok = ins_common::Mkdirs(data_dir_.c_str());
     if (!ok) {
-        LOG(FATAL, "failed to create dir :%s", data_dir.c_str());
+        LOG(FATAL, "failed to create dir :%s", data_dir_.c_str());
         abort();
     }
     // Create default database for shared namespace, i.e. anonymous user
-    std::string full_name = data_dir + "/@db";
+    std::string full_name = data_dir_ + "/@db";
     leveldb::Options options;
     options.create_if_missing = true;
     if (FLAGS_ins_data_compress) {
@@ -38,15 +51,6 @@ StorageManager::StorageManager(const std::string& data_dir) : data_dir_(data_dir
     leveldb::Status status = leveldb::DB::Open(options, full_name, &default_db);
     assert(status.ok());
     dbs_[""] = default_db;
-}
-
-StorageManager::~StorageManager() {
-    MutexLock lock(&mu_);
-    for (std::map<std::string, leveldb::DB*>::iterator it = dbs_.begin();
-         it != dbs_.end(); ++it) {
-        delete it->second;
-        it->second = NULL;
-    }
 }
 
 bool StorageManager::OpenDatabase(const std::string& name) {
@@ -96,6 +100,14 @@ void StorageManager::Reset() {
         it->second = NULL;
     }
     dbs_.clear();
+
+    std::string full_name = data_dir_ + "/@db";
+    leveldb::Status status = leveldb::DestroyDB(full_name, leveldb::Options());
+    if (!status.ok()) {
+      LOG(FATAL, "destroy db in %s fail", full_name.c_str());
+    }
+
+    OpenDefaultDB();
 }
 
 bool StorageManager::DestroyStorageManager(const std::string& storage_path) {
