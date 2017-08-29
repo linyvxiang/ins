@@ -292,7 +292,7 @@ private:
     bool LoadSnapshot();
     bool WriteSnapshot();
     void WriteSnapshotInterval();
-    void TrySendSnapshot();
+    void TrySendSnapshot(const std::string& follower_id);
 public:
     std::vector<std::string> members_;
 private:

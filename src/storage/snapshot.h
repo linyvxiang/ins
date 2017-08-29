@@ -16,6 +16,7 @@ public:
   ~SnapshotManager();
   bool AddSnapshot();
   bool LoadSnapshot();
+  bool OpenSnapshot();
   bool CloseSnapshot();
   bool GetSnapshotMeta(SnapshotMeta* meta);
   bool ApplySnapshot();

@@ -40,6 +40,7 @@ DECLARE_int32(ins_add_new_node_timeout);
 DECLARE_bool(ins_enable_snapshot);
 DECLARE_int32(ins_snapshot_interval);
 DECLARE_string(ins_snapshot_dir);
+DECLARE_int32(ins_max_snapshot_request_size);
 
 const std::string tag_last_applied_index = "#TAG_LAST_APPLIED_INDEX#";
 
@@ -928,7 +929,7 @@ void InsNodeImpl::ReplicateLog(std::string follower_id) {
                 //maybe we should send a snapshot
                 //TODO make return value of ReadSlot indicate log lost or doesn't exist
                 replicating_.erase(follower_id);
-                TrySendSnapshot();
+                TrySendSnapshot(follower_id);
                 LOG(WARNING, "bad slot [%ld], can't replicate on %s ",
                     prev_index, follower_id.c_str());
                 return;
@@ -2548,8 +2549,60 @@ void InsNodeImpl::WriteSnapshotInterval() {
                          boost::bind(&InsNodeImpl::WriteSnapshotInterval, this));
 }
 
-void InsNodeImpl::TrySendSnapshot() {
+void InsNodeImpl::TrySendSnapshot(const std::string& follower_id) {
+  MutexLock snapshot_lock(&snapshot_lock_mu_);
+  if (!snapshot_manager_->OpenSnapshot()) {
+    LOG(WARNING, "open snapshot fail");
+    return;
+  }
+  InsNode_Stub* stub;
+  rpc_client_.GetStub(follower_id, &stub);
+  std::string key;
+  std::string val;
+  InstallSnapshotRequest request;
+  InstallSnapshotResponse response;
+  int64_t cur_timestamp = ins_common::timer::get_micros();
+  request.set_timestamp(cur_timestamp);
 
+  while (snapshot_manager_->GetNextUserDataRecord(&key, &val)) {
+    if (request.ByteSize() >= FLAGS_ins_max_snapshot_request_size) {
+      bool ok = rpc_client_.SendRequest(stub,
+                                        &InsNode_Stub::InstallSnapshot,
+                                        &request,
+                                        &response,
+                                        60, 1);
+      if (!ok) {
+        LOG(WARNING, "send snapshot rpc fail");
+        delete stub;
+        return;
+      }
+      request.Clear();
+      response.Clear();
+      request.set_timestamp(cur_timestamp);
+    }
+    SnapshotItem* cur_item = request.add_items();
+    cur_item->set_key(key);
+    cur_item->set_val(val);
+  }
+
+  // write meta last
+  SnapshotItem* meta_item = request.add_items();
+  meta_item->set_key(snapshot_manager_->GetMetaDataPrefix());
+  std::string meta_val;
+  snapshot_manager_->GetMetaDataRecord(&meta_val);
+  meta_item->set_val(meta_val);
+  request.set_is_last(true);
+  bool ok = rpc_client_.SendRequest(stub,
+                                    &InsNode_Stub::InstallSnapshot,
+                                    &request,
+                                    &response,
+                                    60, 1);
+  if (!ok) {
+    LOG(WARNING, "send last snapshot packet fail");
+    return;
+  }
+  delete stub;
+  //TODO add follower_id to replicatter task
 }
 
 } //namespace ins
