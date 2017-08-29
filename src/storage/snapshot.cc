@@ -6,7 +6,7 @@ namespace galaxy {
 namespace ins {
 
 static const std::string kMetaPrefix = "#M";
-static const std::string kDataPrefix = "#D";
+static const std::string kDataPrefix = "#U";
 
 SnapshotManager::SnapshotManager(const std::string& snapshot_dir) :
   db_(NULL),
