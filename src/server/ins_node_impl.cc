@@ -130,8 +130,8 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
 
     server_start_timestamp_ = ins_common::timer::get_micros();
     committer_.AddTask(boost::bind(&InsNodeImpl::CommitIndexObserv, this));
-    MutexLock lock(&mu_);
     if (!FLAGS_ins_quiet_mode) {
+        MutexLock lock(&mu_);
         CheckLeaderCrash();
     }
     session_checker_.AddTask(
