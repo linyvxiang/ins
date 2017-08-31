@@ -144,8 +144,10 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
             boost::bind(&InsNodeImpl::GarbageClean, this)
         );
     }
+
+    //LoadSnapshot();
     if (FLAGS_ins_enable_snapshot) {
-        replicatter_.AddTask(boost::bind(&InsNodeImpl::WriteSnapshotInterval, this));
+        replicatter_.DelayTask(10 * 1000, boost::bind(&InsNodeImpl::WriteSnapshotInterval, this));
     }
 }
 
@@ -2505,6 +2507,7 @@ bool InsNodeImpl::WriteSnapshot() {
     current_term = current_term_;
     voted = voted_for_[current_term_];
     it = data_store_->NewIterator(StorageManager::anonymous_user);
+    it->Seek("");
     members = members_;
   }
 
