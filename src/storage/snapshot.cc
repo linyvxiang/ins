@@ -112,7 +112,7 @@ bool SnapshotManager::GetNextUserDataRecord(std::string* key, std::string* val) 
   }
   if (it_->Valid()) {
     leveldb::Slice slice = it_->key();
-    *key = std::string(slice.data(), slice.size());
+    *key = std::string(slice.data() + kDataPrefix.size(), slice.size() - kDataPrefix.size());
     slice = it_->value();
     *val = std::string(slice.data(), slice.size());
     it_->Next();
