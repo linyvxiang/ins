@@ -11,7 +11,9 @@ static const std::string kDataPrefix = "#U";
 SnapshotManager::SnapshotManager(const std::string& snapshot_dir) :
   db_(NULL),
   it_(NULL),
-  snapshot_dir_(snapshot_dir) { }
+  snapshot_dir_(snapshot_dir) {
+    LOG(INFO, "snapshot working dir: %s", snapshot_dir.c_str());
+  }
 
 SnapshotManager::~SnapshotManager() {
   delete db_;
