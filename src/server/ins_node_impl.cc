@@ -2335,6 +2335,7 @@ void InsNodeImpl::InstallSnapshot(::google::protobuf::RpcController* controller,
     doing_snapshot_timestamp_ = request->timestamp();
     snapshot_manager_->DeleteSnapshot();
     snapshot_manager_->AddSnapshot();
+    LOG(INFO, "start receive snapshot, timestamp: %ld", request->timestamp());
   }
 
   for (int i = 0; i < request->items_size(); i++) {
@@ -2352,6 +2353,7 @@ void InsNodeImpl::InstallSnapshot(::google::protobuf::RpcController* controller,
   if (request->is_last()) {
     snapshot_manager_->CloseSnapshot();
     doing_snapshot_timestamp_ = -1;
+    LOG(INFO, "finish receive snapshot,  timestamp: %ld, start load snapshot");
     snapshot_manager_->LoadSnapshot();
   }
   response->set_success(true);
@@ -2562,6 +2564,7 @@ void InsNodeImpl::TrySendSnapshot(const std::string& follower_id) {
     LOG(WARNING, "open snapshot fail");
     return;
   }
+
   InsNode_Stub* stub;
   rpc_client_.GetStub(follower_id, &stub);
   std::string key;
@@ -2570,6 +2573,7 @@ void InsNodeImpl::TrySendSnapshot(const std::string& follower_id) {
   InstallSnapshotResponse response;
   int64_t cur_timestamp = ins_common::timer::get_micros();
   request.set_timestamp(cur_timestamp);
+  LOG(INFO, "try send snapshot to %s, timestamp: %ld", follower_id.c_str(), cur_timestamp);
 
   while (snapshot_manager_->GetNextUserDataRecord(&key, &val)) {
     if (request.ByteSize() >= FLAGS_ins_max_snapshot_request_size) {
@@ -2609,6 +2613,7 @@ void InsNodeImpl::TrySendSnapshot(const std::string& follower_id) {
     return;
   }
   delete stub;
+  LOG(INFO, "send snapshot to %s success", follower_id.c_str());
 
   SnapshotMeta snapshot_meta;
   snapshot_meta.ParseFromString(meta_val);
