@@ -43,10 +43,17 @@ public:
     static std::string IntToString(int64_t num);
     static int64_t StringToInt(const std::string& s);
     void GetLastLogIndexAndTerm(int64_t* last_log_index, int64_t* last_log_term);
+    void Reset();
+private:
+    bool Destroy();
 private:
     leveldb::DB* db_;
     int64_t length_;
     int64_t last_log_term_;
+    std::string data_dir_;
+    bool compress_;
+    int32_t block_size_;
+    int32_t write_buffer_size_;
     Mutex mu_;
 };
 

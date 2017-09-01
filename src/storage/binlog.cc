@@ -17,21 +17,33 @@ BinLogger::BinLogger(const std::string& data_dir,
                      int32_t block_size,
                      int32_t write_buffer_size) : db_(NULL),
                                                   length_(0),
-                                                  last_log_term_(-1) {
-    bool ok = ins_common::Mkdirs(data_dir.c_str());
+                                                  last_log_term_(-1),
+                                                  data_dir_(data_dir),
+                                                  compress_(compress),
+                                                  block_size_(block_size),
+                                                  write_buffer_size_(write_buffer_size) {
+    Reset();
+}
+
+BinLogger::~BinLogger() {
+    delete db_;
+}
+
+void BinLogger::Reset() {
+    bool ok = ins_common::Mkdirs(data_dir_.c_str());
     if (!ok) {
-        LOG(FATAL, "failed to create dir :%s", data_dir.c_str());
+        LOG(FATAL, "failed to create dir :%s", data_dir_.c_str());
         abort();
     }
-    std::string full_name = data_dir + "/" + log_dbname;
+    std::string full_name = data_dir_ + "/" + log_dbname;
     leveldb::Options options;
     options.create_if_missing = true;
-    if (compress) {
+    if (compress_) {
         options.compression = leveldb::kSnappyCompression;
         LOG(INFO, "enable snappy compress for binlog");
     }
-    options.write_buffer_size = write_buffer_size;
-    options.block_size = block_size;
+    options.write_buffer_size = write_buffer_size_;
+    options.block_size = block_size_;
     LOG(INFO, "[binlog]: block_size: %d, writer_buffer_size: %d", 
         options.block_size,
         options.write_buffer_size);
@@ -54,8 +66,10 @@ BinLogger::BinLogger(const std::string& data_dir,
     }
 }
 
-BinLogger::~BinLogger() {
-    delete db_;
+bool BinLogger::Destroy() {
+  std::string full_name = data_dir_ + "/" + log_dbname;
+  leveldb::Status status = leveldb::DestroyDB(full_name, leveldb::Options());
+  return status.ok();
 }
 
 int64_t BinLogger::GetLength() {
