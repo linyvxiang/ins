@@ -130,6 +130,10 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
         last_applied_index_ =  BinLogger::StringToInt(tag_value);
     }
 
+    if (FLAGS_ins_enable_snapshot) {
+        LoadSnapshot();
+    }
+
     server_start_timestamp_ = ins_common::timer::get_micros();
     committer_.AddTask(boost::bind(&InsNodeImpl::CommitIndexObserv, this));
     if (!FLAGS_ins_quiet_mode) {
@@ -145,7 +149,6 @@ InsNodeImpl::InsNodeImpl(std::string& server_id,
         );
     }
 
-    //LoadSnapshot();
     if (FLAGS_ins_enable_snapshot) {
         replicatter_.DelayTask(10 * 1000, boost::bind(&InsNodeImpl::WriteSnapshotInterval, this));
     }
@@ -2482,10 +2485,14 @@ bool InsNodeImpl::LoadSnapshot() {
           BinLogger::IntToString(snapshot_meta.log_index()));
       if (status == kOk) {
         last_applied_index_ = snapshot_meta.log_index();
+        commit_index_ = last_applied_index_;
+        current_term_ = snapshot_meta.term();
       } else {
         LOG(FATAL, "write last_applied_index %ld fail", snapshot_meta.log_index());
         return false;
       }
+      binlogger_->Reset(true);
+      binlogger_->SetLengthAndLastLogTerm(snapshot_meta.log_index() + 1, snapshot_meta.term());
     }
   }
   return true;
