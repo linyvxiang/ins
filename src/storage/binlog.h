@@ -43,7 +43,8 @@ public:
     static std::string IntToString(int64_t num);
     static int64_t StringToInt(const std::string& s);
     void GetLastLogIndexAndTerm(int64_t* last_log_index, int64_t* last_log_term);
-    void Reset();
+    void Reset(bool destroy = false);
+    bool SetLengthAndLastLogTerm(int64_t length, int64_t term);
 private:
     bool Destroy();
 private:

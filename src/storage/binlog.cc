@@ -29,11 +29,19 @@ BinLogger::~BinLogger() {
     delete db_;
 }
 
-void BinLogger::Reset() {
+void BinLogger::Reset(bool destroy) {
+    MutexLock lock(&mu_);
+    if (db_) {
+      delete db_;
+      db_ = NULL;
+    }
     bool ok = ins_common::Mkdirs(data_dir_.c_str());
     if (!ok) {
         LOG(FATAL, "failed to create dir :%s", data_dir_.c_str());
         abort();
+    }
+    if (destroy) {
+      Destroy();
     }
     std::string full_name = data_dir_ + "/" + log_dbname;
     leveldb::Options options;
@@ -70,6 +78,26 @@ bool BinLogger::Destroy() {
   std::string full_name = data_dir_ + "/" + log_dbname;
   leveldb::Status status = leveldb::DestroyDB(full_name, leveldb::Options());
   return status.ok();
+}
+
+bool BinLogger::SetLengthAndLastLogTerm(int64_t log_length, int64_t term) {
+    LogEntry log_entry;
+    log_entry.term = term;
+    std::string buf;
+    DumpLogEntry(log_entry, &buf);
+    std::string cur_index;
+    std::string next_index;
+    MutexLock lock(&mu_);
+    cur_index = IntToString(log_length - 1);
+    next_index = IntToString(log_length);
+    leveldb::WriteBatch batch;
+    batch.Put(cur_index, buf);
+    batch.Put(length_tag, next_index);
+    leveldb::Status status = db_->Write(leveldb::WriteOptions(), &batch);
+    assert(status.ok());
+    length_ = log_length;
+    last_log_term_ = term;
+    return status.ok();
 }
 
 int64_t BinLogger::GetLength() {
