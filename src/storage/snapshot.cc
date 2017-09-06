@@ -119,6 +119,7 @@ bool SnapshotManager::GetNextUserDataRecord(std::string* key, std::string* val) 
     return true;
   } else {
     delete it_;
+    it_ = NULL;
     return false;
   }
 }
