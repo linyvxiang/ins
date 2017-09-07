@@ -293,6 +293,8 @@ private:
     bool WriteSnapshot();
     void WriteSnapshotInterval();
     void TrySendSnapshot(const std::string& follower_id);
+private:
+    void UpdateMembership(int64_t log_index, const std::string& new_node_addr);
 public:
     std::vector<std::string> members_;
 private:

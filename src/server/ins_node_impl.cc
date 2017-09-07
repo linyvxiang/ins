@@ -376,7 +376,7 @@ void InsNodeImpl::CommitIndexObserv() {
                     LOG(INFO, "log idx %ld for add node %s has been committed",
                         i, new_node_addr.c_str());
                     mu_.Lock();
-                    members_.push_back(new_node_addr);
+                    UpdateMembership(i, new_node_addr);
                     mu_.Unlock();
                     replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog,
                           this, new_node_addr));
@@ -2388,9 +2388,7 @@ void InsNodeImpl::WriteMembershipChangeLog(const std::string& new_node_addr) {
     ack.done = membership_change_context_->done;
     ack.add_node_response =
         dynamic_cast<AddNodeResponse*>(membership_change_context_->response);
-    std::vector<std::string> new_members(members_);
-    new_members.push_back(new_node_addr);
-    changed_members_.insert(std::make_pair(cur_index, new_members));
+    UpdateMembership(cur_index, new_node_addr);
     replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog, this, new_node_addr));
     replication_cond_->Broadcast();
     if (single_node_mode_) { //single node cluster
@@ -2653,6 +2651,15 @@ void InsNodeImpl::TrySendSnapshot(const std::string& follower_id) {
                                this, follower_id));
     }
   }
+}
+
+void InsNodeImpl::UpdateMembership(int64_t log_index, const std::string& new_node_addr) {
+  if (changed_members_.find(log_index) == changed_members_.end()) {
+    std::vector<std::string> new_members(members_);
+    new_members.push_back(new_node_addr);
+    changed_members_.insert(std::make_pair(log_index, new_members));
+  }
+  members_.push_back(new_node_addr);
 }
 
 } //namespace ins
