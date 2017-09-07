@@ -153,9 +153,16 @@ bool BinLogger::ReadSlot(int64_t slot_index, LogEntry* log_entry) {
         LoadLogEntry(value, log_entry);
         return true;
     } else if (status.IsNotFound()) {
-        return false;
+        MutexLock lock(&mu_);
+        if (slot_index + 1 == length_) {
+          LogEntry tmp_log;
+          tmp_log.term = last_log_term_;
+          *log_entry = tmp_log;
+          return true;
+        } else {
+          return false;
+        }
     }
-    abort();
 }
 
 void BinLogger::AppendEntryList(
