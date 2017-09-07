@@ -2391,7 +2391,7 @@ void InsNodeImpl::WriteMembershipChangeLog(const std::string& new_node_addr) {
     std::vector<std::string> new_members(members_);
     new_members.push_back(new_node_addr);
     changed_members_.insert(std::make_pair(cur_index, new_members));
-    //TODO check whether need to replicate this log to the new comer
+    replicatter_.AddTask(boost::bind(&InsNodeImpl::ReplicateLog, this, new_node_addr));
     replication_cond_->Broadcast();
     if (single_node_mode_) { //single node cluster
         UpdateCommitIndex(binlogger_->GetLength() - 1);
