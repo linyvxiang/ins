@@ -754,7 +754,8 @@ void InsNodeImpl::DoAppendEntries(const ::galaxy::ins::AppendEntriesRequest* req
                 response->set_current_term(current_term_);
                 response->set_success(false);
                 response->set_log_length(binlogger_->GetLength());
-                LOG(INFO, "[AppendEntries] prev log is beyond");
+                LOG(INFO, "[AppendEntries] prev log is beyond, prev log index %ld, "
+                    "local log length %ld", request->prev_log_index(), binlogger_->GetLength());
                 done->Run();
                 return;
             }
@@ -938,9 +939,9 @@ void InsNodeImpl::ReplicateLog(std::string follower_id) {
                 //maybe we should send a snapshot
                 //TODO make return value of ReadSlot indicate log lost or doesn't exist
                 replicating_.erase(follower_id);
-                TrySendSnapshot(follower_id);
-                LOG(WARNING, "bad slot [%ld], can't replicate on %s ",
+                LOG(WARNING, "bad slot [%ld], can't replicate on %s , try send snapshot",
                     prev_index, follower_id.c_str());
+                TrySendSnapshot(follower_id);
                 return;
             }
             prev_term = prev_log_entry.term;
@@ -975,9 +976,11 @@ void InsNodeImpl::ReplicateLog(std::string follower_id) {
             max_term = std::max(max_term, log_entry.term);
         }
         if (has_bad_slot) {
-            LOG(FATAL, "bad slot, can't replicate on server: %s", follower_id.c_str());
+            LOG(WARNING, "bad slot, can't replicate on server: %s, try send snapshot",
+                follower_id.c_str());
+            TrySendSnapshot(follower_id);
             mu_.Lock();
-            break;
+            return;
         }
         bool ok = rpc_client_.SendRequest(stub, 
                                           &InsNode_Stub::AppendEntries,
@@ -2357,7 +2360,9 @@ void InsNodeImpl::InstallSnapshot(::google::protobuf::RpcController* controller,
     snapshot_manager_->CloseSnapshot();
     doing_snapshot_timestamp_ = -1;
     LOG(INFO, "finish receive snapshot,  timestamp: %ld, start load snapshot");
-    snapshot_manager_->LoadSnapshot();
+    snapshot_lock_mu_.Unlock();
+    LoadSnapshot();
+    snapshot_lock_mu_.Lock();
   }
   response->set_success(true);
   done->Run();
@@ -2472,10 +2477,8 @@ bool InsNodeImpl::LoadSnapshot() {
         }
       }
       if (!self_in_cluster) {
-        LOG(FATAL, "this node is not in cluster membership,"
-            " please check your configuration. self: %s",
-            self_id_.c_str());
-        return false;
+        LOG(WARNING, "this node is not in cluster membership of this snapshot,"
+            " self: %s", self_id_.c_str());
       }
 
       meta_->WriteCurrentTerm(snapshot_meta.term());
@@ -2487,6 +2490,9 @@ bool InsNodeImpl::LoadSnapshot() {
         last_applied_index_ = snapshot_meta.log_index();
         commit_index_ = last_applied_index_;
         current_term_ = snapshot_meta.term();
+        LOG(INFO, "load snapshot set last_applied_index to %ld, "
+            "commit_index to %ld, current_term to %ld",
+            last_applied_index_, commit_index_, current_term_);
       } else {
         LOG(FATAL, "write last_applied_index %ld fail", snapshot_meta.log_index());
         return false;
@@ -2505,6 +2511,10 @@ bool InsNodeImpl::WriteSnapshot() {
   //so the meta for the snapshot keeps consistent
   //TODO use conditional var optimize the lock
   MutexLock snapshot_lock(&snapshot_lock_mu_);
+  if (doing_snapshot_timestamp_ != -1) {
+    LOG(INFO, "receiving snapshot now, skip write snapshot interval");
+    return false;
+  }
   std::vector<std::string> members;
   int64_t last_applied_index;
   int64_t current_term;
@@ -2567,9 +2577,10 @@ void InsNodeImpl::WriteSnapshotInterval() {
 
 void InsNodeImpl::TrySendSnapshot(const std::string& follower_id) {
   MutexLock snapshot_lock(&snapshot_lock_mu_);
-  if (!snapshot_manager_->OpenSnapshot()) {
-    LOG(WARNING, "open snapshot fail");
-    return;
+  SnapshotMeta m;
+  if (!snapshot_manager_->GetSnapshotMeta(&m)) {
+    LOG(WARNING, "get snapshot meta fail");
+    return ;
   }
 
   InsNode_Stub* stub;
@@ -2591,7 +2602,6 @@ void InsNodeImpl::TrySendSnapshot(const std::string& follower_id) {
                                         60, 1);
       if (!ok) {
         LOG(WARNING, "send snapshot rpc fail");
-        delete stub;
         return;
       }
       request.Clear();
@@ -2619,7 +2629,6 @@ void InsNodeImpl::TrySendSnapshot(const std::string& follower_id) {
     LOG(WARNING, "send last snapshot packet fail");
     return;
   }
-  delete stub;
   LOG(INFO, "send snapshot to %s success", follower_id.c_str());
 
   SnapshotMeta snapshot_meta;
@@ -2628,10 +2637,22 @@ void InsNodeImpl::TrySendSnapshot(const std::string& follower_id) {
     MutexLock lock(&mu_);
     next_index_[follower_id] = snapshot_meta.log_index() + 1;
     match_index_[follower_id] = snapshot_meta.log_index();
+    LOG(INFO, "set %s next_index to %ld match_index to %ld",
+        follower_id.c_str(), next_index_[follower_id], match_index_[follower_id]);
+    if (next_index_[follower_id] + FLAGS_min_log_gap >= binlogger_->GetLength()) {
+      // so this is a new comer and is suitable for join
+      // maybe already timeout, so check membership change context
+      if (!membership_change_context_) {
+        LOG(WARNING, "not in membership change, maybe already timeout");
+        return;
+      }
+
+      LOG(INFO, "new node %s caught up, try write membership change log",
+          follower_id.c_str());
+      follower_worker_.AddTask(boost::bind(&InsNodeImpl::WriteMembershipChangeLog,
+                               this, follower_id));
+    }
   }
-  //TODO make delay time configurable
-  replicatter_.DelayTask(60 * 1000,
-                         boost::bind(&InsNodeImpl::ReplicateLog, this, follower_id));
 }
 
 } //namespace ins
